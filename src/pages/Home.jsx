@@ -43,7 +43,7 @@ export default function Home() {
         section.products.length > 0 ? (
           <DealSection
             key={section.title}
-            title={`Top ${section.title}`}
+            title={`Top Products ${section.title}`}
             products={section.products}
             loading={loadingAll}
           />
