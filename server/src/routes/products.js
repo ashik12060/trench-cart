@@ -31,6 +31,7 @@ const normalizeProductPayload = async (body = {}, existingDoc = null) => {
     payload.sale_price === "" || payload.sale_price === null || payload.sale_price === undefined
       ? null
       : Number(payload.sale_price);
+  payload.discount_amount = Number(payload.discount_amount || 0);
   payload.cost_price =
     payload.cost_price === "" || payload.cost_price === null || payload.cost_price === undefined
       ? null
@@ -40,6 +41,16 @@ const normalizeProductPayload = async (body = {}, existingDoc = null) => {
       ? null
       : Number(payload.weight);
   payload.supplier_available = Boolean(payload.supplier_available);
+
+  if (payload.discount_amount > 0 && payload.price > 0) {
+    payload.discount_amount = Math.min(Math.max(payload.discount_amount, 0), payload.price);
+    payload.sale_price = Number((payload.price - payload.discount_amount).toFixed(2));
+  } else if (payload.sale_price && payload.sale_price < payload.price) {
+    payload.discount_amount = Number((payload.price - payload.sale_price).toFixed(2));
+  } else {
+    payload.discount_amount = 0;
+    payload.sale_price = null;
+  }
 
   if (!payload.supplier_available) {
     payload.supplier_id = "";

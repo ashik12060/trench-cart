@@ -4,9 +4,11 @@ import { createPageUrl } from "@/utils";
 import { useCart } from "@/lib/CartContext";
 
 export default function ProductCard({ product, onAddToCart }) {
-  const discount = product.discount_price
-    ? Math.round(((product.price - product.discount_price) / product.price) * 100)
+  const isOnSale = product.sale_price && product.sale_price < product.price;
+  const discount = isOnSale
+    ? Math.round(((product.price - product.sale_price) / product.price) * 100)
     : 0;
+  const displayPrice = isOnSale ? product.sale_price : product.price;
   const { addToCart: contextAddToCart } = useCart();
 
   const handleAddToCart = (event) => {
@@ -54,13 +56,13 @@ export default function ProductCard({ product, onAddToCart }) {
         </div>
         <div className="mt-auto flex items-center justify-between">
           <div>
-            {product.discount_price ? (
+            {isOnSale ? (
               <div className="flex items-center gap-2">
-                <span className="text-lg font-bold text-gray-900">${product.discount_price}</span>
-                <span className="text-sm text-gray-400 line-through">${product.price}</span>
+                <span className="text-lg font-bold text-gray-900">${displayPrice?.toFixed(2)}</span>
+                <span className="text-sm text-gray-400 line-through">${product.price?.toFixed(2)}</span>
               </div>
             ) : (
-              <span className="text-lg font-bold text-gray-900">${product.price}</span>
+              <span className="text-lg font-bold text-gray-900">${product.price?.toFixed(2)}</span>
             )}
           </div>
         <button

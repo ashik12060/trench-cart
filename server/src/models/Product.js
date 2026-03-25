@@ -18,6 +18,7 @@ const ProductSchema = new mongoose.Schema(
     short_description: { type: String, default: "" },
     price: { type: Number, default: 0 },
     sale_price: { type: Number, default: null },
+    discount_amount: { type: Number, default: 0 },
     cost_price: { type: Number, default: null },
     sku: { type: String, default: "", trim: true },
     category_id: { type: String, default: "" },

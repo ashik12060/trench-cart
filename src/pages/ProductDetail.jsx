@@ -151,8 +151,8 @@ export default function ProductDetail() {
     );
   }
 
-  const discount = product.discount_price
-    ? Math.round(((product.price - product.discount_price) / product.price) * 100)
+  const discount = product.sale_price
+    ? Math.round(((product.price - product.sale_price) / product.price) * 100)
     : 0;
 
   const related = relatedProducts.filter(p => p.id !== product.id).slice(0, 4);
@@ -209,12 +209,12 @@ export default function ProductDetail() {
           {/* Price */}
           <div className="flex items-baseline gap-3 mb-6">
             <span className="text-3xl font-extrabold text-gray-900">
-              ${product.discount_price || product.price}
+              ${(product.sale_price || product.price)?.toFixed(2)}
             </span>
-            {product.discount_price && (
+            {product.sale_price && (
               <>
-                <span className="text-lg text-gray-400 line-through">${product.price}</span>
-                <Badge className="bg-green-100 text-green-800 font-bold">Save ${(product.price - product.discount_price).toFixed(0)}</Badge>
+                <span className="text-lg text-gray-400 line-through">${product.price?.toFixed(2)}</span>
+                <Badge className="bg-green-100 text-green-800 font-bold">Save ${(product.price - product.sale_price).toFixed(2)}</Badge>
               </>
             )}
           </div>

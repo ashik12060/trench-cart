@@ -51,13 +51,13 @@ export default function ProductListing() {
       );
     }
     result = result.filter(p => {
-      const price = p.discount_price || p.price;
+      const price = p.sale_price || p.price;
       return price >= priceRange[0] && price <= priceRange[1];
     });
 
     switch (sortBy) {
-      case "price_low": result.sort((a, b) => (a.discount_price || a.price) - (b.discount_price || b.price)); break;
-      case "price_high": result.sort((a, b) => (b.discount_price || b.price) - (a.discount_price || a.price)); break;
+      case "price_low": result.sort((a, b) => (a.sale_price || a.price) - (b.sale_price || b.price)); break;
+      case "price_high": result.sort((a, b) => (b.sale_price || b.price) - (a.sale_price || a.price)); break;
       case "rating": result.sort((a, b) => (b.rating || 0) - (a.rating || 0)); break;
       default: break;
     }

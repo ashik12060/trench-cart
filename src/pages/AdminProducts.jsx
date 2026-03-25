@@ -215,6 +215,13 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
     stock_quantity: computeVariantStock(variants),
   });
 
+  const computeSalePrice = (price, discountPercentage) => {
+    const parsedPrice = parseFloat(price) || 0;
+    const parsedDiscount = parseFloat(discountPercentage) || 0;
+    if (parsedPrice <= 0 || parsedDiscount <= 0) return "";
+    return Math.max(parsedPrice - parsedDiscount, 0).toFixed(2);
+  };
+
   React.useEffect(() => {
     if (product) {
       setForm(
@@ -230,6 +237,7 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
         short_description: "",
         price: "",
         sale_price: "",
+        discount_amount: 0,
         cost_price: "",
         sku: "",
         category_id: "",
@@ -253,7 +261,10 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
     mutationFn: async (data) => {
       const cleanData = { ...data };
       cleanData.price = parseFloat(cleanData.price) || 0;
-      cleanData.sale_price = cleanData.sale_price ? parseFloat(cleanData.sale_price) : null;
+      cleanData.discount_amount = parseFloat(cleanData.discount_amount) || 0;
+      cleanData.sale_price = cleanData.discount_amount > 0
+        ? parseFloat(computeSalePrice(cleanData.price, cleanData.discount_amount)) || null
+        : null;
       cleanData.cost_price = cleanData.cost_price ? parseFloat(cleanData.cost_price) : null;
       cleanData.low_stock_threshold = parseInt(cleanData.low_stock_threshold, 10) || 5;
       cleanData.weight = cleanData.weight ? parseFloat(cleanData.weight) : null;
@@ -365,18 +376,68 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
             <Textarea value={form.description || ""} onChange={(e) => update("description", e.target.value)} className="mt-1.5 h-24" />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <div>
               <Label>Price *</Label>
               <Input type="number" step="0.01" required value={form.price || ""} onChange={(e) => update("price", e.target.value)} className="mt-1.5" />
             </div>
             <div>
-              <Label>Sale Price</Label>
-              <Input type="number" step="0.01" value={form.sale_price || ""} onChange={(e) => update("sale_price", e.target.value)} className="mt-1.5" />
-            </div>
-            <div>
               <Label>Cost Price</Label>
               <Input type="number" step="0.01" value={form.cost_price || ""} onChange={(e) => update("cost_price", e.target.value)} className="mt-1.5" />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-emerald-950">Discount Section</p>
+                <p className="mt-1 text-xs text-emerald-700">
+                  Add a discount percentage and the storefront will show the old price crossed out with the new price and discount badge.
+                </p>
+              </div>
+              {(parseFloat(form.discount_amount) || 0) > 0 ? (
+                <Badge className="border-0 bg-emerald-600 text-white">
+                  {form.price > 0
+                    ? `${Math.round(((parseFloat(form.discount_amount) || 0) / (parseFloat(form.price) || 1)) * 100)}% OFF`
+                    : "Discount"}
+                </Badge>
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              <div>
+                <Label>Discount Amount</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.discount_amount ?? 0}
+                  onChange={(e) => update("discount_amount", e.target.value)}
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label>New Price</Label>
+                <Input
+                  type="number"
+                  value={computeSalePrice(form.price, form.discount_amount)}
+                  readOnly
+                  className="mt-1.5 bg-white"
+                />
+              </div>
+              <div>
+                <Label>Discount Percentage</Label>
+                <Input
+                  type="text"
+                  value={
+                    (parseFloat(form.discount_amount) || 0) > 0 && (parseFloat(form.price) || 0) > 0
+                      ? `${Math.round(((parseFloat(form.discount_amount) || 0) / (parseFloat(form.price) || 1)) * 100)}%`
+                      : "0%"
+                  }
+                  readOnly
+                  className="mt-1.5 bg-white"
+                />
+              </div>
             </div>
           </div>
 
