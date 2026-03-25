@@ -4,12 +4,20 @@ import { cloudinary } from "../config/cloudinary.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-const uploadBufferToCloudinary = (buffer, folder = "digitrench") =>
+const uploadBufferToCloudinary = (buffer, { folder = "digitrench", publicId = "" } = {}) =>
   new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream({ folder }, (error, result) => {
-      if (error) return reject(error);
-      resolve(result);
-    });
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        public_id: publicId || undefined,
+        overwrite: true,
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      },
+    );
     stream.end(buffer);
   });
 
@@ -32,7 +40,10 @@ uploadsRouter.post("/image", upload.single("file"), async (req, res, next) => {
       });
     }
 
-    const uploaded = await uploadBufferToCloudinary(req.file.buffer);
+    const uploaded = await uploadBufferToCloudinary(req.file.buffer, {
+      folder: String(req.body.folder || "digitrench").trim() || "digitrench",
+      publicId: String(req.body.public_id || "").trim(),
+    });
     return res.json({ file_url: uploaded.secure_url });
   } catch (error) {
     next(error);

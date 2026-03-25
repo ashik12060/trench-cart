@@ -60,6 +60,7 @@ import AdminSuppliers from './pages/AdminSuppliers';
 import AdminCategories from './pages/AdminCategories';
 import AdminOrders from './pages/AdminOrders';
 import AdminInventory from './pages/AdminInventory';
+import AdminBarcodes from './pages/AdminBarcodes';
 import __Layout from './Layout.jsx';
 
 export const PAGES = {
@@ -76,6 +77,7 @@ export const PAGES = {
     "admin/categories": AdminCategories,
     "admin/orders": AdminOrders,
     "admin/inventory": AdminInventory,
+    "admin/barcodes": AdminBarcodes,
 }
 
 export const pagesConfig = {

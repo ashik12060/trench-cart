@@ -11,11 +11,21 @@ const normalizeEmail = (value) => normalizeString(value).toLowerCase();
 const sanitizePublicProduct = (product) => {
   const data = product.toJSON();
   delete data.cost_price;
+  delete data.barcode;
   delete data.supplier_available;
   delete data.supplier_id;
   delete data.supplier_name;
   delete data.supplier_code;
   delete data.supplier_purchase_quantity;
+  delete data.barcode_image_url;
+  if (Array.isArray(data.variants)) {
+    data.variants = data.variants.map((variant) => {
+      const nextVariant = { ...variant };
+      delete nextVariant.barcode;
+      delete nextVariant.barcode_image_url;
+      return nextVariant;
+    });
+  }
   return data;
 };
 

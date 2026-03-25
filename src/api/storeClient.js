@@ -129,9 +129,11 @@ const storeApi = {
     },
   },
   uploads: {
-    async image({ file }) {
+    async image({ file, folder, publicId } = {}) {
       const formData = new FormData();
       formData.append("file", file);
+      if (folder) formData.append("folder", folder);
+      if (publicId) formData.append("public_id", publicId);
       return request("/uploads/image", {
         method: "POST",
         body: formData,
@@ -164,6 +166,11 @@ const storeApi = {
         return request(`/admin/products/${id}`, {
           method: "PUT",
           body: data,
+        });
+      },
+      generateBarcodes() {
+        return request("/admin/products/generate-barcodes", {
+          method: "POST",
         });
       },
       delete(id) {

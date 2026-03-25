@@ -7,6 +7,8 @@ const VariantSchema = new mongoose.Schema(
     size: { type: String, default: "" },
     color: { type: String, default: "" },
     quantity: { type: Number, default: 0 },
+    barcode: { type: String, default: "", trim: true },
+    barcode_image_url: { type: String, default: "", trim: true },
   },
   { _id: false },
 );
@@ -21,6 +23,8 @@ const ProductSchema = new mongoose.Schema(
     discount_amount: { type: Number, default: 0 },
     cost_price: { type: Number, default: null },
     sku: { type: String, default: "", trim: true },
+    barcode: { type: String, default: "", trim: true },
+    barcode_image_url: { type: String, default: "", trim: true },
     category_id: { type: String, default: "" },
     stock_quantity: { type: Number, default: 0 },
     low_stock_threshold: { type: Number, default: 5 },

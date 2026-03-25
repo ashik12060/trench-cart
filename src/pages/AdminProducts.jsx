@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Upload, Package } from "lucide-react";
 import { toast } from "sonner";
 import SearchBar from "@/components/store/SearchBar";
+import { buildVariantBarcode, createBarcodeSvgFile, ensureClientBarcodes, generateProductBarcode, normalizeClientBarcode } from "@/lib/barcodes";
 
 export default function AdminProducts() {
   const [showForm, setShowForm] = useState(false);
@@ -47,7 +48,8 @@ export default function AdminProducts() {
   const filtered = products.filter((product) =>
     product.name?.toLowerCase().includes(search.toLowerCase()) ||
     product.sku?.toLowerCase().includes(search.toLowerCase()) ||
-    product.supplier_name?.toLowerCase().includes(search.toLowerCase())
+    product.supplier_name?.toLowerCase().includes(search.toLowerCase()) ||
+    product.barcode?.toLowerCase().includes(search.toLowerCase())
   );
 
   const categoryMap = {};
@@ -224,14 +226,13 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
 
   React.useEffect(() => {
     if (product) {
-      setForm(
-        syncStockWithVariants(product.variants || [], {
-          ...product,
-          supplier_available: Boolean(product.supplier_available),
-        }),
-      );
+      const normalizedProduct = ensureClientBarcodes({
+        ...product,
+        supplier_available: Boolean(product.supplier_available),
+      });
+      setForm(syncStockWithVariants(normalizedProduct.variants || [], normalizedProduct));
     } else {
-      setForm({
+      setForm(ensureClientBarcodes({
         name: "",
         description: "",
         short_description: "",
@@ -253,7 +254,7 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
         supplier_available: false,
         supplier_id: "",
         supplier_purchase_quantity: 0,
-      });
+      }));
     }
   }, [product, open]);
 
@@ -274,7 +275,49 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
         size: variant?.size || "",
         color: variant?.color || "",
         quantity: parseInt(variant?.quantity, 10) || 0,
+        barcode: normalizeClientBarcode(variant?.barcode || ""),
       }));
+      cleanData.barcode = normalizeClientBarcode(cleanData.barcode || "");
+
+      const uploadBarcodeImage = async (barcode, publicId, meta = {}) => {
+        if (!barcode) return "";
+        try {
+          const file = await createBarcodeSvgFile(barcode, `${publicId || barcode}.svg`, meta);
+          const { file_url } = await storeApi.uploads.image({
+            file,
+            folder: "digitrench/barcodes",
+            publicId,
+          });
+          return file_url || "";
+        } catch (error) {
+          console.warn("[barcode] image upload skipped", error);
+          return "";
+        }
+      };
+
+      cleanData.barcode_image_url =
+        (await uploadBarcodeImage(cleanData.barcode, cleanData.barcode, {
+          title: cleanData.name,
+          sku: cleanData.sku,
+          kind: "Product",
+          quantity: cleanData.stock_quantity,
+          price: cleanData.sale_price || cleanData.price,
+        })) || cleanData.barcode_image_url || "";
+      cleanData.variants = await Promise.all(
+        cleanData.variants.map(async (variant) => ({
+          ...variant,
+          barcode_image_url:
+            (await uploadBarcodeImage(variant.barcode, variant.barcode, {
+              title: cleanData.name,
+              sku: variant.sku || cleanData.sku,
+              size: variant.size,
+              color: variant.color,
+              kind: "Variant",
+              quantity: variant.quantity,
+              price: cleanData.sale_price || cleanData.price,
+            })) || variant.barcode_image_url || "",
+        })),
+      );
 
       if (!cleanData.supplier_available) {
         cleanData.supplier_id = "";
@@ -317,7 +360,8 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
 
   const addVariant = () => {
     setForm((prev) => {
-      const variants = [...(prev.variants || []), { sku: "", size: "", color: "", quantity: 0 }];
+      const nextVariant = buildVariantBarcode({ parentBarcode: prev.barcode || generateProductBarcode(prev), index: (prev.variants || []).length });
+      const variants = [...(prev.variants || []), { sku: "", size: "", color: "", quantity: 0, barcode: nextVariant }];
       return syncStockWithVariants(variants, prev);
     });
   };
@@ -334,11 +378,48 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
     setForm((prev) => {
       const variants = [...(prev.variants || [])];
       variants.splice(index, 1);
-      return syncStockWithVariants(variants, prev);
+      const parentBarcode = prev.barcode || generateProductBarcode(prev);
+      const syncedVariants = variants.map((variant, variantIndex) => ({
+        ...variant,
+        barcode: buildVariantBarcode({ parentBarcode, index: variantIndex }),
+      }));
+      return syncStockWithVariants(syncedVariants, prev);
     });
   };
 
-  const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
+  const update = (field, value) =>
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+
+      if (field === "sku" || field === "name") {
+        const nextBarcode = generateProductBarcode(next);
+        const nextVariants = (next.variants || []).map((variant, index) => ({
+          ...variant,
+          barcode: buildVariantBarcode({ parentBarcode: nextBarcode, index }),
+        }));
+        return syncStockWithVariants(nextVariants, { ...next, barcode: nextBarcode });
+      }
+
+      return next;
+    });
+  const regenerateProductFormBarcode = () => setForm((prev) => {
+    const nextBarcode = generateProductBarcode(prev);
+    const nextVariants = (prev.variants || []).map((variant, index) => ({
+      ...variant,
+      barcode: buildVariantBarcode({ parentBarcode: nextBarcode, index }),
+    }));
+
+    return syncStockWithVariants(nextVariants, { ...prev, barcode: nextBarcode });
+  });
+  const regenerateVariantFormBarcode = (index) =>
+    setForm((prev) => {
+      const variants = [...(prev.variants || [])];
+      variants[index] = {
+        ...variants[index],
+        barcode: buildVariantBarcode({ parentBarcode: prev.barcode || generateProductBarcode(prev), index }),
+      };
+      return syncStockWithVariants(variants, prev);
+    });
 
   const selectedSupplier = suppliers.find((supplier) => supplier.id === form.supplier_id);
 
@@ -363,6 +444,30 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
             <div>
               <Label>SKU</Label>
               <Input value={form.sku || ""} onChange={(e) => update("sku", e.target.value)} className="mt-1.5" />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Barcode Tracking</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Product barcodes use the format TC + year + SKU-based code + random digits. Variant barcodes inherit the parent code and add A, B, C, D and more.
+                </p>
+              </div>
+              <Button type="button" variant="outline" className="rounded-full" onClick={regenerateProductFormBarcode}>
+                Regenerate Product Barcode
+              </Button>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+              <div>
+                <Label>Product Barcode</Label>
+                <Input value={form.barcode || ""} readOnly className="mt-1.5 bg-white" />
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                Barcode image will be saved to Cloudinary after save
+              </div>
             </div>
           </div>
 
@@ -561,7 +666,7 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Variants</p>
-                <p className="text-xs text-gray-400">Size/color combinations with per-variant stock.</p>
+                <p className="text-xs text-gray-400">Size/color combinations with per-variant stock and barcode labels.</p>
               </div>
               <Button type="button" variant="ghost" size="sm" className="gap-2 text-sm" onClick={addVariant}>
                 <Plus className="h-4 w-4" />
@@ -573,28 +678,49 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
             ) : (
               <div className="space-y-3">
                 {form.variants.map((variant, index) => (
-                  <div key={`variant-${index}`} className="grid items-end gap-3 md:grid-cols-5">
-                    <div>
-                      <Label>Size</Label>
-                      <Input value={variant.size || ""} onChange={(e) => updateVariant(index, "size", e.target.value)} placeholder="e.g. M, 9, 32" className="mt-1" />
+                  <div key={`variant-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                    <div className="grid items-end gap-3 xl:grid-cols-[repeat(4,minmax(0,1fr))_1.2fr_auto]">
+                      <div>
+                        <Label>Size</Label>
+                        <Input value={variant.size || ""} onChange={(e) => updateVariant(index, "size", e.target.value)} placeholder="e.g. M, 9, 32" className="mt-1 bg-white" />
+                      </div>
+                      <div>
+                        <Label>Color</Label>
+                        <Input value={variant.color || ""} onChange={(e) => updateVariant(index, "color", e.target.value)} placeholder="e.g. Black" className="mt-1 bg-white" />
+                      </div>
+                      <div>
+                        <Label>Quantity</Label>
+                        <Input type="number" value={variant.quantity ?? ""} onChange={(e) => updateVariant(index, "quantity", e.target.value)} className="mt-1 bg-white" />
+                      </div>
+                      <div>
+                        <Label>SKU (optional)</Label>
+                        <Input value={variant.sku || ""} onChange={(e) => updateVariant(index, "sku", e.target.value)} className="mt-1 bg-white" />
+                      </div>
+                      <div>
+                        <Label>Variant Barcode</Label>
+                        <Input
+                          value={variant.barcode || ""}
+                          readOnly
+                          className="mt-1 bg-white"
+                        />
+                      </div>
+                      <div className="flex gap-1 xl:justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => regenerateVariantFormBarcode(index)}
+                          className="rounded-full px-3 text-xs"
+                        >
+                          Refresh
+                        </Button>
+                        <Button type="button" size="icon" variant="ghost" onClick={() => removeVariant(index)} className="h-9 w-9 rounded-full">
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
                     </div>
-                    <div>
-                      <Label>Color</Label>
-                      <Input value={variant.color || ""} onChange={(e) => updateVariant(index, "color", e.target.value)} placeholder="e.g. Black" className="mt-1" />
-                    </div>
-                    <div>
-                      <Label>Quantity</Label>
-                      <Input type="number" value={variant.quantity ?? ""} onChange={(e) => updateVariant(index, "quantity", e.target.value)} className="mt-1" />
-                    </div>
-                    <div>
-                      <Label>SKU (optional)</Label>
-                      <Input value={variant.sku || ""} onChange={(e) => updateVariant(index, "sku", e.target.value)} className="mt-1" />
-                    </div>
-                    <div className="flex justify-end">
-                      <Button type="button" size="icon" variant="ghost" onClick={() => removeVariant(index)} className="h-9 w-9 rounded-full">
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </div>
+                    <p className="mt-3 text-xs text-slate-500">
+                      This barcode is used in the admin barcode print page for this exact size and color combination.
+                    </p>
                   </div>
                 ))}
               </div>
