@@ -2,14 +2,17 @@ import { Router } from "express";
 import { Product } from "../models/Product.js";
 import { Category } from "../models/Category.js";
 import { Order } from "../models/Order.js";
-import { parseFilters, parseSort } from "../utils/query.js";
+import { parseFields, parseFilters, parseSort } from "../utils/query.js";
 import { findVariantByAttributes, recalcStockFromVariants } from "../utils/inventory.js";
 import { optionalCustomer } from "../middleware/auth.js";
 
 const normalizeString = (value) => (typeof value === "string" ? value.trim() : "");
 const normalizeEmail = (value) => normalizeString(value).toLowerCase();
 const sanitizePublicProduct = (product) => {
-  const data = product.toJSON();
+  const data = typeof product?.toJSON === "function" ? product.toJSON() : { ...(product || {}) };
+  if (!data.id && data._id) {
+    data.id = String(data._id);
+  }
   delete data.cost_price;
   delete data.barcode;
   delete data.supplier_available;
@@ -45,8 +48,10 @@ publicRouter.get("/products", async (req, res, next) => {
     const filters = parseFilters(req.query);
     const sort = parseSort(req.query.sort);
     const limit = req.query.limit ? Number(req.query.limit) : 0;
-    let query = Product.find(filters).sort(sort);
+    const fields = parseFields(req.query.fields);
+    let query = Product.find(filters).sort(sort).lean();
     if (limit > 0) query = query.limit(limit);
+    if (fields) query = query.select(fields);
     const products = await query.exec();
     res.json(products.map(sanitizePublicProduct));
   } catch (error) {
@@ -59,9 +64,15 @@ publicRouter.get("/categories", async (req, res, next) => {
     const filters = parseFilters(req.query);
     const sort = parseSort(req.query.sort);
     const limit = req.query.limit ? Number(req.query.limit) : 0;
-    let query = Category.find(filters).sort(sort);
+    let query = Category.find(filters).sort(sort).lean();
     if (limit > 0) query = query.limit(limit);
-    res.json(await query.exec());
+    const categories = await query.exec();
+    res.json(
+      categories.map((category) => ({
+        ...category,
+        id: category.id || String(category._id),
+      })),
+    );
   } catch (error) {
     next(error);
   }

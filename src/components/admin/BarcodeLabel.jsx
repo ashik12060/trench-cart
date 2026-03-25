@@ -67,25 +67,25 @@ const printSvg = (svgMarkup, title = "barcode-label") => {
       <head>
         <title>${title}</title>
         <style>
-          @page { size: 3in 2in; margin: 0; }
+          @page { size: 1.5in 1in; margin: 0; }
           html, body {
-            width: 3in;
-            height: 2in;
+            width: 1.5in;
+            height: 1in;
             margin: 0;
             padding: 0;
             overflow: hidden;
             background: #fff;
           }
           .sheet {
-            width: 3in;
-            height: 2in;
+            width: 1.5in;
+            height: 1in;
             display: flex;
             align-items: center;
             justify-content: center;
           }
           svg {
-            width: 3in;
-            height: 2in;
+            width: 1.5in;
+            height: 1in;
             display: block;
           }
         </style>

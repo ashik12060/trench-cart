@@ -50,7 +50,7 @@ const request = async (path, { method = "GET", body, headers = {}, signal } = {}
   return payload;
 };
 
-const buildQuery = (filters = {}, sort, limit) => {
+const buildQuery = (filters = {}, sort, limit, fields) => {
   const params = new URLSearchParams();
   Object.entries(filters || {}).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;
@@ -62,6 +62,10 @@ const buildQuery = (filters = {}, sort, limit) => {
   });
   if (sort) params.set("sort", sort);
   if (limit) params.set("limit", String(limit));
+  if (fields) {
+    const normalizedFields = Array.isArray(fields) ? fields.filter(Boolean).join(",") : String(fields).trim();
+    if (normalizedFields) params.set("fields", normalizedFields);
+  }
   return params.toString();
 };
 
@@ -146,13 +150,13 @@ const storeApi = {
       list(order, limit) {
         return storeApi.entities.Product.filter({}, order, limit);
       },
-      adminList(order, limit) {
-        const query = buildQuery({}, order, limit);
+      adminList(order, limit, fields) {
+        const query = buildQuery({}, order, limit, fields);
         const suffix = query ? `?${query}` : "";
         return request(`/admin/products${suffix}`);
       },
-      filter(filters = {}, order, limit) {
-        const query = buildQuery(filters, order, limit);
+      filter(filters = {}, order, limit, fields) {
+        const query = buildQuery(filters, order, limit, fields);
         const suffix = query ? `?${query}` : "";
         return request(`/products${suffix}`);
       },

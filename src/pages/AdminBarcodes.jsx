@@ -53,8 +53,13 @@ export default function AdminBarcodes() {
   const [labelType, setLabelType] = React.useState("all");
 
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ["admin-products"],
-    queryFn: () => storeApi.entities.Product.adminList("-created_date"),
+    queryKey: ["admin-products", "barcodes"],
+    queryFn: () =>
+      storeApi.entities.Product.adminList(
+        "-created_date",
+        undefined,
+        "name,sku,stock_quantity,price,sale_price,barcode,barcode_image_url,variants",
+      ),
   });
 
   const generateMutation = useMutation({
@@ -108,7 +113,7 @@ export default function AdminBarcodes() {
 
           .barcode-print-grid {
             display: grid !important;
-            grid-template-columns: repeat(auto-fit, minmax(3in, 3in)) !important;
+            grid-template-columns: repeat(auto-fit, minmax(1.5in, 1.5in)) !important;
             gap: 0.15in !important;
           }
 
@@ -116,9 +121,9 @@ export default function AdminBarcodes() {
             break-inside: avoid;
             page-break-inside: avoid;
             box-shadow: none !important;
-            width: 3in !important;
-            height: 2in !important;
-            padding: 0.12in !important;
+            width: 1.5in !important;
+            height: 1in !important;
+            padding: 0.06in !important;
           }
         }
       `}</style>

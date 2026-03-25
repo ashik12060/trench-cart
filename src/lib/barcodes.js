@@ -113,7 +113,7 @@ export const createBarcodeLabelSvg = (barcode, meta = {}) => {
     .join("  ");
 
   return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="3in" height="2in" viewBox="0 0 300 200">
+    <svg xmlns="http://www.w3.org/2000/svg" width="1.5in" height="1in" viewBox="0 0 300 200">
       <rect width="300" height="200" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
       <text x="150" y="18" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#0f172a">${title || kind}</text>
       <text x="150" y="31" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" letter-spacing="1.5" fill="#64748b">${kind.toUpperCase()}</text>

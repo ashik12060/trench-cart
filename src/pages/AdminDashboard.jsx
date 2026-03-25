@@ -11,8 +11,13 @@ const PIE_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#c084fc", "#d8b4fe", "#e9d
 
 export default function AdminDashboard() {
   const { data: products = [] } = useQuery({
-    queryKey: ["admin-products"],
-    queryFn: () => storeApi.entities.Product.adminList(),
+    queryKey: ["admin-products", "dashboard"],
+    queryFn: () =>
+      storeApi.entities.Product.adminList(
+        "-created_date",
+        undefined,
+        "category_id,low_stock_threshold,stock_quantity",
+      ),
   });
 
   const { data: orders = [] } = useQuery({

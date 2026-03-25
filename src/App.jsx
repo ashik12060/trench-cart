@@ -72,6 +72,14 @@ const AuthenticatedApp = () => {
           </LayoutWrapper>
         }
       />
+      <Route
+        path="/checkout"
+        element={
+          <LayoutWrapper currentPageName="Checkout">
+            {Pages.Checkout ? <Pages.Checkout /> : <></>}
+          </LayoutWrapper>
+        }
+      />
       {Object.entries(Pages).map(([path, Page]) => (
         <Route
           key={path}

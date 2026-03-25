@@ -15,6 +15,16 @@ export const parseSort = (rawSort = "-created_date") => {
   return Object.keys(sort).length ? sort : { created_date: -1 };
 };
 
+export const parseFields = (rawFields = "") => {
+  if (!rawFields) return null;
+  const fields = String(rawFields)
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" ");
+  return fields || null;
+};
+
 const coerce = (value) => {
   if (value === "true") return true;
   if (value === "false") return false;
@@ -25,7 +35,7 @@ const coerce = (value) => {
 export const parseFilters = (query = {}) => {
   const filters = {};
   Object.entries(query).forEach(([key, value]) => {
-    if (["sort", "limit", "page"].includes(key)) return;
+    if (["sort", "limit", "page", "fields"].includes(key)) return;
     if (key === "id") {
       filters._id = coerce(value);
       return;

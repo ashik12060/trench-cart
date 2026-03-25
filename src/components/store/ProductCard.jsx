@@ -19,7 +19,7 @@ export default function ProductCard({ product, onAddToCart }) {
       transition={{ duration: 0.3 }}
       className="group bg-white rounded-2xl overflow-hidden border border-gray-100 hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-500"
     >
-      <Link to={createPageUrl("ProductDetail") + `?id=${product.id}`}>
+      <Link to={`${createPageUrl("ProductDetail")}/${product.id}`}>
         <div className="relative aspect-square overflow-hidden bg-gray-50">
           <img
             src={mainImage}
@@ -47,7 +47,7 @@ export default function ProductCard({ product, onAddToCart }) {
         {product.brand && (
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1">{product.brand}</p>
         )}
-        <Link to={createPageUrl("ProductDetail") + `?id=${product.id}`}>
+        <Link to={`${createPageUrl("ProductDetail")}/${product.id}`}>
           <h3 className="font-semibold text-gray-900 text-sm leading-snug line-clamp-2 hover:text-indigo-600 transition-colors">
             {product.name}
           </h3>

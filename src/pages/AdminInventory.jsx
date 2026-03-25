@@ -1,13 +1,11 @@
 import React, { useState } from "react";
 import { storeApi } from "@/api/storeClient";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { AlertTriangle, Package, TrendingDown, TrendingUp, Save, FileSpreadsheet } from "lucide-react";
+import { AlertTriangle, Package, TrendingDown, TrendingUp, FileSpreadsheet } from "lucide-react";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
-import { toast } from "sonner";
 import StatsCard from "@/components/admin/StatsCard";
 import SearchBar from "@/components/store/SearchBar";
 
@@ -29,45 +27,58 @@ const getVariantSummary = (product) => {
 
 export default function AdminInventory() {
   const [search, setSearch] = useState("");
-  const [editingStock, setEditingStock] = useState({});
-  const queryClient = useQueryClient();
+  const deferredSearch = React.useDeferredValue(search);
 
   const { data: products = [] } = useQuery({
-    queryKey: ["admin-products"],
-    queryFn: () => storeApi.entities.Product.adminList(),
+    queryKey: ["admin-products", "inventory"],
+    queryFn: () =>
+      storeApi.entities.Product.adminList(
+        "-created_date",
+        undefined,
+        "name,sku,category_id,images,price,sale_price,stock_quantity,low_stock_threshold,variants",
+      ),
   });
 
   const { data: categories = [] } = useQuery({
     queryKey: ["admin-categories"],
-    queryFn: () => storeApi.entities.Category.list(),
+    queryFn: () => storeApi.entities.Category.list("-created_date"),
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, stock }) => storeApi.entities.Product.update(id, { stock_quantity: parseInt(stock, 10) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-      toast.success("Stock updated");
-    },
-  });
+  const categoryMap = React.useMemo(() => {
+    const map = {};
+    categories.forEach((category) => {
+      map[category.id] = category.name;
+    });
+    return map;
+  }, [categories]);
 
-  const categoryMap = {};
-  categories.forEach((category) => {
-    categoryMap[category.id] = category.name;
-  });
+  const totals = React.useMemo(() => {
+    const totalStock = products.reduce((sum, product) => sum + Number(product.stock_quantity || 0), 0);
+    const lowStock = products.filter(
+      (product) => Number(product.stock_quantity || 0) <= Number(product.low_stock_threshold || 5) && Number(product.stock_quantity || 0) > 0,
+    );
+    const outOfStock = products.filter((product) => Number(product.stock_quantity || 0) <= 0);
+    return { totalStock, lowStock, outOfStock };
+  }, [products]);
 
-  const totalStock = products.reduce((sum, product) => sum + (product.stock_quantity || 0), 0);
-  const lowStock = products.filter((product) => product.stock_quantity <= (product.low_stock_threshold || 5) && product.stock_quantity > 0);
-  const outOfStock = products.filter((product) => (product.stock_quantity || 0) <= 0);
+  const filtered = React.useMemo(() => {
+    const q = deferredSearch.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter(
+      (product) =>
+        product.name?.toLowerCase().includes(q) ||
+        product.sku?.toLowerCase().includes(q),
+    );
+  }, [deferredSearch, products]);
 
-  const filtered = products.filter((product) =>
-    product.name?.toLowerCase().includes(search.toLowerCase()) ||
-    product.sku?.toLowerCase().includes(search.toLowerCase()),
-  );
-  const filteredTotalStock = filtered.reduce((sum, product) => sum + Number(product.stock_quantity || 0), 0);
-  const filteredTotalValue = filtered.reduce(
-    (sum, product) => sum + (Number(product.sale_price || product.price || 0) * Number(product.stock_quantity || 0)),
-    0,
-  );
+  const filteredTotals = React.useMemo(() => {
+    const filteredTotalStock = filtered.reduce((sum, product) => sum + Number(product.stock_quantity || 0), 0);
+    const filteredTotalValue = filtered.reduce(
+      (sum, product) => sum + (Number(product.sale_price || product.price || 0) * Number(product.stock_quantity || 0)),
+      0,
+    );
+    return { filteredTotalStock, filteredTotalValue };
+  }, [filtered]);
 
   const downloadStockReport = () => {
     const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
@@ -75,8 +86,10 @@ export default function AdminInventory() {
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 40;
     const contentWidth = pageWidth - margin * 2;
-    const reportLowStock = filtered.filter((product) => product.stock_quantity <= (product.low_stock_threshold || 5) && product.stock_quantity > 0);
-    const reportOutOfStock = filtered.filter((product) => (product.stock_quantity || 0) <= 0);
+    const reportLowStock = filtered.filter(
+      (product) => Number(product.stock_quantity || 0) <= Number(product.low_stock_threshold || 5) && Number(product.stock_quantity || 0) > 0,
+    );
+    const reportOutOfStock = filtered.filter((product) => Number(product.stock_quantity || 0) <= 0);
     let y = margin;
 
     const ensureSpace = (height = 20) => {
@@ -227,9 +240,9 @@ export default function AdminInventory() {
       let totalsX = margin + 8;
       doc.text("Grand Totals", totalsX, y);
       totalsX += columns[0].width + columns[1].width + columns[2].width + columns[3].width;
-      doc.text(String(filteredTotalStock), totalsX, y);
+      doc.text(String(filteredTotals.filteredTotalStock), totalsX, y);
       totalsX += columns[4].width;
-      doc.text(`$${filteredTotalValue.toFixed(2)}`, totalsX, y);
+      doc.text(`$${filteredTotals.filteredTotalValue.toFixed(2)}`, totalsX, y);
       doc.setDrawColor(203, 213, 225);
       doc.line(margin, y + 10, tableRight, y + 10);
       y += 10;
@@ -259,10 +272,10 @@ export default function AdminInventory() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatsCard title="Total Items" value={totalStock} icon={Package} color="indigo" index={0} />
+        <StatsCard title="Total Items" value={totals.totalStock} icon={Package} color="indigo" index={0} />
         <StatsCard title="Products" value={products.length} icon={TrendingUp} color="green" index={1} />
-        <StatsCard title="Low Stock" value={lowStock.length} subtitle="Below threshold" icon={TrendingDown} color="amber" index={2} />
-        <StatsCard title="Out of Stock" value={outOfStock.length} subtitle="Need restocking" icon={AlertTriangle} color="red" index={3} />
+        <StatsCard title="Low Stock" value={totals.lowStock.length} subtitle="Below threshold" icon={TrendingDown} color="amber" index={2} />
+        <StatsCard title="Out of Stock" value={totals.outOfStock.length} subtitle="Need restocking" icon={AlertTriangle} color="red" index={3} />
       </div>
 
       <div className="max-w-sm">
@@ -285,10 +298,12 @@ export default function AdminInventory() {
             </thead>
             <tbody>
               {filtered.map((product, index) => {
-                const isLow = product.stock_quantity <= (product.low_stock_threshold || 5) && product.stock_quantity > 0;
-                const isOut = (product.stock_quantity || 0) <= 0;
+                const stockQuantity = Number(product.stock_quantity || 0);
+                const threshold = Number(product.low_stock_threshold || 5);
+                const isLow = stockQuantity <= threshold && stockQuantity > 0;
+                const isOut = stockQuantity <= 0;
                 const unitPrice = Number(product.sale_price || product.price || 0);
-                const totalValue = unitPrice * Number(product.stock_quantity || 0);
+                const totalValue = unitPrice * stockQuantity;
 
                 return (
                   <tr key={product.id} className={`border-b last:border-0 hover:bg-gray-50 ${isOut ? "bg-red-50/30" : isLow ? "bg-amber-50/30" : ""}`}>
@@ -319,7 +334,7 @@ export default function AdminInventory() {
                     </td>
                     <td className="px-6 py-4 font-medium text-gray-700">${unitPrice.toFixed(2)}</td>
                     
-                    <td className="px-6 py-4 text-lg font-bold">{product.stock_quantity || 0}</td>
+                    <td className="px-6 py-4 text-lg font-bold">{stockQuantity}</td>
                     <td className="px-6 py-4 font-medium text-gray-900">${totalValue.toFixed(2)}</td>
                     <td className="px-6 py-4">
                       {isOut ? (
@@ -348,8 +363,8 @@ export default function AdminInventory() {
                   <td className="px-6 py-4 font-semibold text-white" colSpan={4}>
                     Grand Totals
                   </td>
-                  <td className="px-6 py-4 font-semibold text-white">{filteredTotalStock}</td>
-                  <td className="px-6 py-4 font-semibold text-white">${filteredTotalValue.toFixed(2)}</td>
+                  <td className="px-6 py-4 font-semibold text-white">{filteredTotals.filteredTotalStock}</td>
+                  <td className="px-6 py-4 font-semibold text-white">${filteredTotals.filteredTotalValue.toFixed(2)}</td>
                   
                   <td className="px-6 py-4 font-semibold text-white"></td>
                 </tr>

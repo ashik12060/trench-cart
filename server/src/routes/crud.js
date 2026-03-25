@@ -1,5 +1,14 @@
 import { Router } from "express";
-import { parseFilters, parseSort } from "../utils/query.js";
+import { parseFields, parseFilters, parseSort } from "../utils/query.js";
+
+const normalizeLeanDoc = (doc) => {
+  if (!doc || doc.id) return doc;
+  if (!doc._id) return doc;
+  return {
+    ...doc,
+    id: String(doc._id),
+  };
+};
 
 export const createCrudRouter = (Model, options = {}) => {
   const { afterUpdate } = options;
@@ -10,12 +19,15 @@ export const createCrudRouter = (Model, options = {}) => {
       const filters = parseFilters(req.query);
       const sort = parseSort(req.query.sort);
       const limit = req.query.limit ? Number(req.query.limit) : 0;
+      const fields = parseFields(req.query.fields);
 
       let query = Model.find(filters).sort(sort);
       if (limit > 0) query = query.limit(limit);
+      if (fields) query = query.select(fields);
+      query = query.lean();
 
       const data = await query.exec();
-      res.json(data);
+      res.json(data.map(normalizeLeanDoc));
     } catch (error) {
       next(error);
     }

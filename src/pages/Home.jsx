@@ -10,7 +10,7 @@ import BrandShowcase from '@/components/home/BrandShowcase';
 export default function Home() {
   const { data: featuredProducts = [], isLoading: loadingFeatured } = useQuery({
     queryKey: ['featured-products'],
-    queryFn: () => storeApi.entities.Product.filter({ featured: true, is_active: true }, '-created_date', 10),
+    queryFn: () => storeApi.entities.Product.filter({ is_featured: true, is_active: true }, '-created_date', 10),
   });
 
   const { data: allProducts = [], isLoading: loadingAll } = useQuery({
@@ -32,7 +32,7 @@ export default function Home() {
     <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-2">
       <HeroBanner />
       <DealSection
-        title="ðŸ”¥ Grab the Best Deals"
+        title="Grab the Best Deals"
         products={featuredProducts.slice(0, 5)}
         loading={loadingFeatured}
       />

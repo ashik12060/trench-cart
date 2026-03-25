@@ -1,10 +1,19 @@
 import { Router } from "express";
 import { Product } from "../models/Product.js";
 import { Supplier } from "../models/Supplier.js";
-import { parseFilters, parseSort } from "../utils/query.js";
+import { parseFields, parseFilters, parseSort } from "../utils/query.js";
 import { buildProductBarcodeBase, buildVariantBarcode, generateProductBarcode, normalizeBarcodeValue } from "../utils/barcodes.js";
 
 const router = Router();
+
+const normalizeLeanDoc = (doc) => {
+  if (!doc || doc.id) return doc;
+  if (!doc._id) return doc;
+  return {
+    ...doc,
+    id: String(doc._id),
+  };
+};
 
 const computeVariantStock = (variants = []) =>
   variants.reduce((sum, variant) => sum + (Number(variant?.quantity) || 0), 0);
@@ -182,11 +191,13 @@ router.get("/", async (req, res, next) => {
     const filters = parseFilters(req.query);
     const sort = parseSort(req.query.sort);
     const limit = req.query.limit ? Number(req.query.limit) : 0;
+    const fields = parseFields(req.query.fields);
 
-    let query = Product.find(filters).sort(sort);
+    let query = Product.find(filters).sort(sort).lean();
     if (limit > 0) query = query.limit(limit);
+    if (fields) query = query.select(fields);
 
-    res.json(await query.exec());
+    res.json((await query.exec()).map(normalizeLeanDoc));
   } catch (error) {
     next(error);
   }

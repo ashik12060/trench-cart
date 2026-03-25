@@ -45,4 +45,10 @@ const ProductSchema = new mongoose.Schema(
   baseSchemaOptions,
 );
 
+ProductSchema.index({ created_date: -1 });
+ProductSchema.index({ category_id: 1, created_date: -1 });
+ProductSchema.index({ is_active: 1, created_date: -1 });
+ProductSchema.index({ sku: 1 });
+ProductSchema.index({ barcode: 1 });
+
 export const Product = mongoose.model("Product", ProductSchema);

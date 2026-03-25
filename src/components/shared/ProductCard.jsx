@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from "react-router-dom";
 import { Star, Heart, ShoppingCart } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useCart } from "@/lib/CartContext";
@@ -18,8 +19,8 @@ export default function ProductCard({ product, onAddToCart }) {
     callback?.(product);
   };
   return (
-    <a
-      href={createPageUrl(`ProductDetail?id=${product.id}`)}
+    <Link
+      to={`${createPageUrl("ProductDetail")}/${product.id}`}
       className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl hover:border-transparent transition-all duration-300 flex flex-col"
     >
       <div className="relative bg-gray-50 p-4 flex items-center justify-center h-48">
@@ -74,6 +75,6 @@ export default function ProductCard({ product, onAddToCart }) {
         </button>
       </div>
       </div>
-    </a>
+    </Link>
   );
 }
