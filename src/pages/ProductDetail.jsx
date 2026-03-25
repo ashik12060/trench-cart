@@ -1,0 +1,402 @@
+import React, { useMemo, useState, useEffect } from 'react';
+import { storeApi } from '@/api/storeClient';
+import { useQuery } from '@tanstack/react-query';
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Star, Heart, ShoppingCart, Truck, RotateCcw, ShieldCheck, Minus, Plus, ChevronRight } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ProductCard from '@/components/shared/ProductCard';
+import { createPageUrl } from '@/utils';
+import { useCart } from "@/lib/CartContext";
+import { useParams, useSearchParams } from "react-router-dom";
+import clsx from "clsx";
+
+export default function ProductDetail() {
+  const [searchParams] = useSearchParams();
+  const { id: paramId } = useParams();
+  const productId = searchParams.get("id") || paramId;
+  const [qty, setQty] = useState(1);
+  const { addToCart } = useCart();
+
+
+  const { data: product, isLoading } = useQuery({
+    queryKey: ['product', productId],
+    queryFn: () => storeApi.entities.Product.filter({ id: productId }),
+    enabled: !!productId,
+    select: (data) => data[0],
+  });
+
+  const { data: relatedProducts = [] } = useQuery({
+    queryKey: ['related', product?.category_id],
+    queryFn: () => storeApi.entities.Product.filter({ category_id: product.category_id }, '-created_date', 5),
+    enabled: !!product?.category_id,
+  });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['product-categories'],
+    queryFn: () => storeApi.entities.Category.filter({ is_active: true }),
+  });
+  const categoryMap = useMemo(() => {
+    const map = {};
+    categories.forEach((cat) => {
+      map[cat.id] = cat.name;
+    });
+    return map;
+  }, [categories]);
+
+  const variants = product?.variants || [];
+  const variantChecksum = useMemo(
+    () =>
+      variants
+        .map((variant) => `${variant.size || "One Size"}-${variant.color || ""}-${variant.quantity || 0}-${variant.sku || ""}`)
+        .join("|"),
+    [variants],
+  );
+
+  const sizeOptions = useMemo(() => {
+    const map = new Map();
+    variants.forEach((variant, index) => {
+      const sizeLabel = (variant.size && variant.size.trim()) || "One Size";
+      const sizeEntry = map.get(sizeLabel) ?? { size: sizeLabel, totalQuantity: 0, colors: [] };
+      const qty = Number(variant.quantity || 0);
+      sizeEntry.totalQuantity += qty;
+      sizeEntry.colors.push({ variant, index, qty });
+      map.set(sizeLabel, sizeEntry);
+    });
+    return Array.from(map.values());
+  }, [variants]);
+
+  const [selectedVariantIndex, setSelectedVariantIndex] = useState(null);
+  useEffect(() => {
+    if (!variants.length) {
+      setSelectedVariantIndex(null);
+      return;
+    }
+    const availableIndex = variants.findIndex((variant) => Number(variant.quantity || 0) > 0);
+    setSelectedVariantIndex(availableIndex >= 0 ? availableIndex : 0);
+  }, [product?.id, variantChecksum]);
+
+  const selectedVariant = selectedVariantIndex !== null ? variants[selectedVariantIndex] : null;
+  const selectedSize = selectedVariant?.size?.trim() || sizeOptions[0]?.size || "";
+  const selectedSizeEntry =
+    sizeOptions.find((entry) => entry.size === selectedSize) || sizeOptions[0] || null;
+  const selectionStock = selectedSizeEntry?.totalQuantity ?? Number(product?.stock_quantity || 0);
+  const availableStock = selectedVariant
+    ? Math.max(0, Number(selectedVariant.quantity || 0))
+    : Math.max(0, selectionStock);
+  const isOutOfStock = availableStock <= 0;
+
+  const colorOptions = selectedSizeEntry?.colors || [];
+
+  const handleSizeSelect = (sizeEntry) => {
+    if (!sizeEntry?.colors?.length) return;
+    const highlight = sizeEntry.colors.find((entry) => entry.qty > 0) || sizeEntry.colors[0];
+    if (highlight) {
+      setSelectedVariantIndex(highlight.index);
+    }
+  };
+
+  const handleColorSelect = (colorEntry) => {
+    if (!colorEntry) return;
+    setSelectedVariantIndex(colorEntry.index);
+  };
+
+  useEffect(() => {
+    setQty(1);
+  }, [selectedVariantIndex]);
+
+  useEffect(() => {
+    setQty((prev) => Math.max(1, Math.min(prev, Math.max(availableStock, 1))));
+  }, [availableStock]);
+
+  const adjustQuantity = (delta) => {
+    setQty((prev) => {
+      if (availableStock <= 0) {
+        return 1;
+      }
+      const next = Math.max(1, prev + delta);
+      return Math.min(next, availableStock);
+    });
+  };
+
+  const handleAddToCart = () => {
+    if (!product || isOutOfStock) return;
+    const extras = selectedVariant ? { variant: selectedVariant } : {};
+    addToCart(product, qty, extras);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-10">
+        <div className="grid md:grid-cols-2 gap-10">
+          <div className="bg-gray-100 rounded-2xl h-96 animate-pulse" />
+          <div className="space-y-4">
+            <div className="bg-gray-100 rounded h-8 w-3/4 animate-pulse" />
+            <div className="bg-gray-100 rounded h-6 w-1/2 animate-pulse" />
+            <div className="bg-gray-100 rounded h-20 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-20 text-center">
+        <div className="text-6xl mb-4">📦</div>
+        <h2 className="text-xl font-bold text-gray-800">Product not found</h2>
+        <a href={createPageUrl("Home")} className="text-blue-700 font-medium mt-2 inline-block">Go back to shop</a>
+      </div>
+    );
+  }
+
+  const discount = product.discount_price
+    ? Math.round(((product.price - product.discount_price) / product.price) * 100)
+    : 0;
+
+  const related = relatedProducts.filter(p => p.id !== product.id).slice(0, 4);
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-2 text-sm text-gray-400 mb-6">
+        <a href={createPageUrl("Home")} className="hover:text-blue-700">Home</a>
+        <ChevronRight className="w-3 h-3" />
+        <a
+          href={createPageUrl(`ProductListing?category=${product.category_id}`)}
+          className="hover:text-blue-700 capitalize"
+        >
+          {categoryMap[product.category_id] || 'Category'}
+        </a>
+        <ChevronRight className="w-3 h-3" />
+        <span className="text-gray-700 font-medium truncate max-w-48">{product.name}</span>
+      </nav>
+
+      <div className="grid md:grid-cols-2 gap-10">
+        {/* Product image */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 flex items-center justify-center relative">
+            {discount > 0 && (
+              <Badge className="absolute top-4 left-4 bg-red-500 text-white text-sm px-3 py-1">
+                -{discount}%
+              </Badge>
+            )}
+          <img
+            src={product.images?.[0] || product.image_url || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80"}
+            alt={product.name}
+            className="max-h-96 max-w-full object-contain"
+          />
+        </div>
+
+        {/* Product info */}
+        <div>
+          <p className="text-sm text-blue-700 font-semibold uppercase tracking-wider mb-1">{product.brand}</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">{product.name}</h1>
+
+          {/* Rating */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-0.5">
+              {Array(5).fill(0).map((_, i) => (
+                <Star
+                  key={i}
+                  className={`w-4 h-4 ${i < Math.round(product.rating || 0) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`}
+                />
+              ))}
+            </div>
+            <span className="text-sm text-gray-500">{product.rating || 0} ({product.reviews_count || 0} reviews)</span>
+          </div>
+
+          {/* Price */}
+          <div className="flex items-baseline gap-3 mb-6">
+            <span className="text-3xl font-extrabold text-gray-900">
+              ${product.discount_price || product.price}
+            </span>
+            {product.discount_price && (
+              <>
+                <span className="text-lg text-gray-400 line-through">${product.price}</span>
+                <Badge className="bg-green-100 text-green-800 font-bold">Save ${(product.price - product.discount_price).toFixed(0)}</Badge>
+              </>
+            )}
+          </div>
+
+          <Separator className="mb-6" />
+
+          <p className="text-gray-600 leading-relaxed mb-6">{product.description}</p>
+
+          {variants.length > 0 && (
+            <div className="mb-6 space-y-4 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold text-gray-900">Sizes</p>
+                  <span className={`text-xs ${selectionStock > 0 ? "text-gray-500" : "text-red-500"}`}>
+                    {selectionStock > 0 ? `${selectionStock} available` : "Out of stock"}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {sizeOptions.map((entry) => {
+                    const isSelectedSize = entry.size === selectedSize;
+                    const isAvailable = entry.totalQuantity > 0;
+                    return (
+                      <button
+                        key={entry.size}
+                        type="button"
+                        onClick={() => handleSizeSelect(entry)}
+                        className={clsx(
+                          "flex-1 min-w-[110px] rounded-2xl border px-4 py-3 text-left transition-colors",
+                          {
+                            "border-gray-200 bg-white text-gray-900 hover:border-gray-300": !isSelectedSize,
+                            "border-blue-800 bg-blue-50 text-blue-900 shadow-inner": isSelectedSize,
+                            "cursor-not-allowed opacity-60": !isAvailable,
+                          },
+                        )}
+                        disabled={!isAvailable}
+                      >
+                        <span className="text-sm font-semibold block">{entry.size}</span>
+                        <span className="text-[11px] text-gray-500">
+                          {isAvailable ? `${entry.totalQuantity} in stock` : "Unavailable"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold text-gray-900">Colors</p>
+                  <span
+                    className={`text-xs ${colorOptions.some((entry) => entry.qty > 0) ? "text-gray-500" : "text-red-500"}`}
+                  >
+                    {colorOptions.some((entry) => entry.qty > 0) ? "Pick a color" : "Out of stock"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {colorOptions.map((colorEntry) => {
+                    const colorVariant = colorEntry.variant;
+                    const isSelectedColor = selectedVariantIndex === colorEntry.index;
+                    const colorLabel = colorVariant.color || "Default";
+                    const swatchStyle = colorVariant.color
+                      ? { backgroundColor: colorVariant.color }
+                      : undefined;
+                    return (
+                      <button
+                        key={`${colorLabel}-${colorEntry.index}`}
+                        type="button"
+                        onClick={() => handleColorSelect(colorEntry)}
+                        className={clsx(
+                          "flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors",
+                          {
+                            "border-gray-200 hover:border-gray-300": !isSelectedColor,
+                            "border-blue-800 bg-blue-50 shadow-inner": isSelectedColor,
+                            "cursor-not-allowed opacity-60": colorEntry.qty <= 0,
+                          },
+                        )}
+                        disabled={colorEntry.qty <= 0}
+                      >
+                        <span
+                          className="w-6 h-6 rounded-full border border-gray-200"
+                          style={swatchStyle}
+                        />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{colorLabel}</p>
+                          <p className="text-[11px] text-gray-500">{colorEntry.qty} pcs</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quantity & Actions */}
+          <div className="mb-6 space-y-2">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center border border-gray-200 rounded-full">
+                <button
+                  onClick={() => adjustQuantity(-1)}
+                  className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-gray-700 transition"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <span className="w-10 text-center font-semibold text-gray-900">{qty}</span>
+                <button
+                  onClick={() => adjustQuantity(1)}
+                  className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-gray-700 transition"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              <Button
+                size="lg"
+                className="bg-blue-800 hover:bg-blue-900 rounded-full px-8 flex-1 md:flex-none shadow-lg shadow-blue-800/20"
+                disabled={isOutOfStock}
+                onClick={handleAddToCart}
+              >
+                <ShoppingCart className="w-4 h-4 mr-2" /> Add to Cart
+              </Button>
+              <Button size="lg" variant="outline" className="rounded-full px-4">
+                <Heart className="w-5 h-5 text-gray-400" />
+              </Button>
+            </div>
+            <p className="text-xs text-gray-500">
+              {selectedVariant
+                ? `${selectedVariant.color || "Default color"} · ${selectedVariant.size || "One size"} · ${availableStock} in stock`
+                : `Stock: ${availableStock} units available`}
+            </p>
+          </div>
+
+          {/* Trust badges */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { icon: Truck, label: "Free Delivery" },
+              { icon: RotateCcw, label: "30-Day Return" },
+              { icon: ShieldCheck, label: "2-Year Warranty" },
+            ].map(({ icon: Icon, label }) => (
+              <div key={label} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2.5">
+                <Icon className="w-4 h-4 text-blue-700" />
+                <span className="text-xs font-medium text-gray-600">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs: Description / Specs */}
+      <div className="mt-12">
+        <Tabs defaultValue="description">
+          <TabsList className="bg-gray-100">
+            <TabsTrigger value="description">Description</TabsTrigger>
+            <TabsTrigger value="specs">Specifications</TabsTrigger>
+          </TabsList>
+          <TabsContent value="description" className="bg-white rounded-xl border border-gray-100 p-6 mt-4">
+            <p className="text-gray-600 leading-relaxed">{product.description || "No description available."}</p>
+          </TabsContent>
+          <TabsContent value="specs" className="bg-white rounded-xl border border-gray-100 p-6 mt-4">
+            {product.specs ? (
+              <div className="space-y-2">
+                {Object.entries(product.specs).map(([key, value]) => (
+                  <div key={key} className="flex border-b border-gray-50 pb-2">
+                    <span className="w-40 font-medium text-gray-700 capitalize">{key.replace(/_/g, ' ')}</span>
+                    <span className="text-gray-600">{value}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500">No specifications available.</p>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Related products */}
+      {related.length > 0 && (
+        <div className="mt-12">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">You May Also Like</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {related.map(p => <ProductCard key={p.id} product={p} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
