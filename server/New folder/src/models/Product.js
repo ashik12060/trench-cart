@@ -7,7 +7,6 @@ const VariantSchema = new mongoose.Schema(
     size: { type: String, default: "" },
     color: { type: String, default: "" },
     quantity: { type: Number, default: 0 },
-    images: { type: [String], default: [] },
     barcode: { type: String, default: "", trim: true },
     barcode_image_url: { type: String, default: "", trim: true },
   },

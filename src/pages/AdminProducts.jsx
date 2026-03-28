@@ -206,7 +206,6 @@ export default function AdminProducts() {
 function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({});
-  const [uploading, setUploading] = useState(false);
 
   const computeVariantStock = (variants = []) =>
     variants.reduce((sum, variant) => sum + (parseInt(variant?.quantity, 10) || 0), 0);
@@ -248,7 +247,6 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
         is_featured: false,
         brand: "",
         weight: "",
-        images: [],
         tags: [],
         variants: [],
         supplier_available: false,
@@ -275,6 +273,9 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
         size: variant?.size || "",
         color: variant?.color || "",
         quantity: parseInt(variant?.quantity, 10) || 0,
+        images: Array.isArray(variant?.images)
+          ? variant.images.map((image) => String(image || "").trim()).filter(Boolean)
+          : [],
         barcode: normalizeClientBarcode(variant?.barcode || ""),
       }));
       cleanData.barcode = normalizeClientBarcode(cleanData.barcode || "");
@@ -342,26 +343,43 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
     },
   });
 
-  const handleImageUpload = async (event) => {
+  const handleVariantImageUpload = async (variantIndex, event) => {
     const file = event.target.files[0];
     if (!file) return;
-    setUploading(true);
     try {
       const { file_url } = await storeApi.uploads.image({ file });
-      setForm((prev) => ({ ...prev, images: [...(prev.images || []), file_url] }));
+      setForm((prev) => {
+        const variants = [...(prev.variants || [])];
+        const currentImages = Array.isArray(variants[variantIndex]?.images) ? variants[variantIndex].images : [];
+        variants[variantIndex] = {
+          ...variants[variantIndex],
+          images: [...currentImages, file_url].filter(Boolean),
+        };
+        return syncStockWithVariants(variants, prev);
+      });
+    } catch (error) {
+      toast.error(error.message || "Unable to upload variant image");
     } finally {
-      setUploading(false);
+      event.target.value = "";
     }
   };
 
-  const removeImage = (index) => {
-    setForm((prev) => ({ ...prev, images: prev.images.filter((_, imageIndex) => imageIndex !== index) }));
+  const removeVariantImage = (variantIndex, imageIndex) => {
+    setForm((prev) => {
+      const variants = [...(prev.variants || [])];
+      const currentImages = Array.isArray(variants[variantIndex]?.images) ? variants[variantIndex].images : [];
+      variants[variantIndex] = {
+        ...variants[variantIndex],
+        images: currentImages.filter((_, idx) => idx !== imageIndex),
+      };
+      return syncStockWithVariants(variants, prev);
+    });
   };
 
   const addVariant = () => {
     setForm((prev) => {
       const nextVariant = buildVariantBarcode({ parentBarcode: prev.barcode || generateProductBarcode(prev), index: (prev.variants || []).length });
-      const variants = [...(prev.variants || []), { sku: "", size: "", color: "", quantity: 0, barcode: nextVariant }];
+      const variants = [...(prev.variants || []), { sku: "", size: "", color: "", quantity: 0, images: [], barcode: nextVariant }];
       return syncStockWithVariants(variants, prev);
     });
   };
@@ -718,6 +736,37 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
                         </Button>
                       </div>
                     </div>
+                    <div className="mt-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">Variant Images</p>
+                          <p className="text-xs text-slate-500">Upload one or more images for this exact variant.</p>
+                        </div>
+                        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-dashed border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400">
+                          <Upload className="h-4 w-4" />
+                          <span>Add image</span>
+                          <input type="file" accept="image/*" className="hidden" onChange={(event) => handleVariantImageUpload(index, event)} />
+                        </label>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-3">
+                        {(variant.images || []).length === 0 ? (
+                          <p className="text-sm text-slate-500">No variant images yet.</p>
+                        ) : (
+                          (variant.images || []).map((image, imageIndex) => (
+                            <div key={`${index}-${imageIndex}`} className="group relative h-20 w-20 overflow-hidden rounded-xl border bg-white">
+                              <img src={image} alt="" className="h-full w-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removeVariantImage(index, imageIndex)}
+                                className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+                              >
+                                <Trash2 className="h-4 w-4 text-white" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
                     <p className="mt-3 text-xs text-slate-500">
                       This barcode is used in the admin barcode print page for this exact size and color combination.
                     </p>
@@ -725,29 +774,6 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
                 ))}
               </div>
             )}
-          </div>
-
-          <div>
-            <Label>Images</Label>
-            <div className="mt-2 flex flex-wrap gap-3">
-              {form.images?.map((image, index) => (
-                <div key={index} className="group relative h-20 w-20 overflow-hidden rounded-xl">
-                  <img src={image} alt="" className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(index)}
-                    className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
-                  >
-                    <Trash2 className="h-4 w-4 text-white" />
-                  </button>
-                </div>
-              ))}
-              <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-gray-200 transition-colors hover:border-gray-400">
-                <Upload className="h-5 w-5 text-gray-400" />
-                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-              </label>
-            </div>
-            {uploading ? <p className="mt-1 text-xs text-gray-400">Uploading...</p> : null}
           </div>
 
           <div className="flex justify-end gap-3 border-t pt-4">

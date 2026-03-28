@@ -2,14 +2,14 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { storeApi } from '@/api/storeClient';
 import { createPageUrl } from '@/utils';
-import { ChevronRight, Sparkles } from 'lucide-react';
+import { ChevronRight, ArrowUpRight } from 'lucide-react';
 
-const palette = [
-  { bg: 'bg-blue-50', text: 'text-blue-700' },
-  { bg: 'bg-purple-50', text: 'text-purple-700' },
-  { bg: 'bg-green-50', text: 'text-green-700' },
-  { bg: 'bg-amber-50', text: 'text-amber-700' },
-  { bg: 'bg-pink-50', text: 'text-pink-700' },
+const defaultImages = [
+  "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80",
+  "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&q=80",
+  "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&q=80",
+  "https://images.unsplash.com/photo-1560343090-f0409e92791a?w=600&q=80",
+  "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=600&q=80",
 ];
 
 export default function CategoryGrid() {
@@ -37,25 +37,38 @@ export default function CategoryGrid() {
           ? Array(4)
             .fill(0)
             .map((_, index) => (
-              <div key={index} className="h-28 rounded-2xl bg-gray-100 animate-pulse" />
+              <div key={index} className="aspect-[4/3] rounded-2xl bg-gray-100 animate-pulse" />
             ))
           : activeCategories.map((cat, idx) => {
-            const colors = palette[idx % palette.length];
+            const image = cat.image_url || defaultImages[idx % defaultImages.length];
             return (
               <a
                 key={cat.id}
                 href={createPageUrl(`ProductListing?category=${cat.id}`)}
-                className="flex flex-col rounded-2xl border border-gray-100 bg-white p-5 hover:shadow-lg transition"
+                className="group relative flex aspect-[4/3] flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white hover:shadow-lg transition"
               >
-                <div className={`flex items-center justify-center w-12 h-12 mb-4 rounded-xl ${colors.bg}`}>
-                  <Sparkles className={`w-5 h-5 ${colors.text}`} />
+                <img
+                  src={image}
+                  alt={cat.name}
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                <div className="relative mt-auto flex items-end justify-between p-5">
+                  <div>
+                    <span className="mb-1 inline-flex rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80">
+                      Category
+                    </span>
+                    <h3 className="text-lg font-bold text-white">{cat.name}</h3>
+                    {cat.description && (
+                      <p className="mt-1 line-clamp-2 text-sm text-white/75">
+                        {cat.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="ml-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition-all duration-300 group-hover:bg-white group-hover:text-gray-900">
+                    <ArrowUpRight className="h-4 w-4" />
+                  </div>
                 </div>
-                <span className="text-base font-semibold text-gray-900">{cat.name}</span>
-                {cat.description && (
-                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                    {cat.description}
-                  </p>
-                )}
               </a>
             );
           })}

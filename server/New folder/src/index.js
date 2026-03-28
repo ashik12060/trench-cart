@@ -17,7 +17,7 @@ import { usersRouter } from "./routes/users.js";
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
-const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:5173,https://trenchcart-site.netlify.app")
+const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:5173" || "https://trenchcart-site.netlify.app")
   .split(",")
   .map((item) => item.trim())
   .filter(Boolean);

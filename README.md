@@ -29,7 +29,7 @@ cp server/.env.example server/.env
 ```
 Set at least:
 ```env
-MONGODB_URI=mongodb://127.0.0.1:27017/megamart
+MONGODB_URI=mongodb://127.0.0.1:27017/trenchcart
 JWT_SECRET=replace-with-strong-random-secret
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=change-this-password

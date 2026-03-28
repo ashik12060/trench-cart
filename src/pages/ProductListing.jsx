@@ -7,17 +7,6 @@ import { Slider } from "@/components/ui/slider";
 import { SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const categoryLabels = {
-  smartphones: "Smartphones",
-  laptops: "Laptops",
-  tablets: "Tablets",
-  smartwatches: "Smartwatches",
-  headphones: "Headphones",
-  cameras: "Cameras",
-  gaming: "Gaming",
-  accessories: "Accessories",
-};
-
 export default function ProductListing() {
   const params = new URLSearchParams(window.location.search);
   const categoryParam = params.get("category") || "";
@@ -32,6 +21,21 @@ export default function ProductListing() {
     queryKey: ['products-listing'],
     queryFn: () => storeApi.entities.Product.list('-created_date', 100),
   });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['listing-categories'],
+    queryFn: () => storeApi.entities.Category.filter({ is_active: true }),
+  });
+
+  const categoryMap = useMemo(() => {
+    const map = new Map();
+    categories.forEach((category) => {
+      if (category?.id) {
+        map.set(String(category.id), category.name || "Category");
+      }
+    });
+    return map;
+  }, [categories]);
 
   const filtered = useMemo(() => {
     let result = [...products];
@@ -65,7 +69,7 @@ export default function ProductListing() {
   }, [products, categoryParam, searchParam, featuredParam, sortBy, priceRange]);
 
   const pageTitle = categoryParam
-    ? categoryLabels[categoryParam] || categoryParam
+    ? categoryMap.get(String(categoryParam)) || categoryParam
     : featuredParam
     ? "Hot Deals"
     : searchParam
@@ -103,24 +107,34 @@ export default function ProductListing() {
         </div>
       </div>
 
-      <div className="flex gap-6">
+      <div className="flex flex-col md:flex-row gap-6">
         {/* Sidebar filters */}
         <aside className={`${showFilters ? 'block' : 'hidden'} md:block w-full md:w-56 flex-shrink-0`}>
-          <div className="bg-white rounded-xl border border-gray-100 p-5 space-y-6 sticky top-32">
+          <div className="bg-white  border border-gray-100 p-5 space-y-6 sticky top-32">
             <div>
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Categories</h3>
               <div className="flex flex-wrap gap-2">
-                {Object.entries(categoryLabels).map(([slug, label]) => (
+                <a
+                  href="?"
+                  className={`text-xs px-3 py-1.5 border transition ${
+                    !categoryParam
+                      ? 'bg-blue-800 text-white border-blue-800'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-700'
+                  }`}
+                >
+                  All
+                </a>
+                {categories.map((category) => (
                   <a
-                    key={slug}
-                    href={`?category=${slug}`}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition ${
-                      categoryParam === slug
+                    key={category.id}
+                    href={`?category=${encodeURIComponent(category.id)}`}
+                    className={`text-xs px-3 py-1.5  border transition ${
+                      String(categoryParam) === String(category.id)
                         ? 'bg-blue-800 text-white border-blue-800'
                         : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-700'
                     }`}
                   >
-                    {label}
+                    {category.name}
                   </a>
                 ))}
               </div>
@@ -151,9 +165,9 @@ export default function ProductListing() {
         {/* Product grid */}
         <div className="flex-1">
           {isLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-5 gap-2">
               {Array(8).fill(0).map((_, i) => (
-                <div key={i} className="bg-gray-100 rounded-xl h-72 animate-pulse" />
+                <div key={i} className="bg-gray-100 h-72 animate-pulse" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
@@ -163,7 +177,7 @@ export default function ProductListing() {
               <p className="text-sm text-gray-500 mt-1">Try adjusting your filters or search terms</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
               {filtered.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}

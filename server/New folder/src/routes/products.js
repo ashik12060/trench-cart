@@ -26,9 +26,6 @@ const normalizeVariants = (variants = []) =>
     size: String(variant?.size || "").trim(),
     color: String(variant?.color || "").trim(),
     quantity: Number(variant?.quantity || 0),
-    images: Array.isArray(variant?.images)
-      ? variant.images.map((image) => String(image || "").trim()).filter(Boolean)
-      : [],
     barcode: normalizeBarcodeValue(variant?.barcode || ""),
     barcode_image_url: String(variant?.barcode_image_url || "").trim(),
   }));
@@ -167,9 +164,6 @@ router.post("/generate-barcodes", async (req, res, next) => {
         size: String(variant?.size || "").trim(),
         color: String(variant?.color || "").trim(),
         quantity: Number(variant?.quantity || 0),
-        images: Array.isArray(variant?.images)
-          ? variant.images.map((image) => String(image || "").trim()).filter(Boolean)
-          : [],
         barcode: normalizeBarcodeValue(variant?.barcode || ""),
         barcode_image_url: String(variant?.barcode_image_url || "").trim(),
       })), nextBarcode, usedBarcodes);

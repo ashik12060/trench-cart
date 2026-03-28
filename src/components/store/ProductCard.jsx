@@ -4,9 +4,10 @@ import { createPageUrl } from "@/utils";
 import { Star, ShoppingCart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
+import { getProductPrimaryImage } from "@/utils/productImages";
 
 export default function ProductCard({ product, onAddToCart }) {
-  const mainImage = product.images?.[0] || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80";
+  const mainImage = getProductPrimaryImage(product, "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80");
   const isOnSale = product.sale_price && product.sale_price < product.price;
   const discount = isOnSale ? Math.round((1 - product.sale_price / product.price) * 100) : 0;
   const displayPrice = isOnSale ? product.sale_price : product.price;

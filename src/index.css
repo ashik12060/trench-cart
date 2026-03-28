@@ -75,6 +75,19 @@
   }
 }
 
+.custom-orange-bg{
+  background-color: #EB682B;
+}
+.custom-orange-text{
+  color: #EB682B;
+}
+.custom-blue-bg{
+  background-color:  #1C2440;
+}
+.custom-blue-text{
+  color:  #1C2440;
+}
+
 
 
 @layer base {

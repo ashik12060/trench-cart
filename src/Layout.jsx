@@ -1,14 +1,16 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Search, ShoppingCart, Heart, User, Menu, X, Truck, RotateCcw, ShieldCheck, Headphones } from "lucide-react";
+import { Search, ShoppingCart, Heart, User, Menu, Truck, RotateCcw, ShieldCheck, Headphones } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import Footer from "@/components/layout/Footer";
 import { useQuery } from "@tanstack/react-query";
 import { storeApi } from "@/api/storeClient";
 import { useCart } from "@/lib/CartContext";
 import { useCustomerAuth } from "@/lib/CustomerAuthContext";
+import logo from '../src/assets/logo-removebd.png'
 
 const selectNavCategories = (categories = []) =>
   categories
@@ -17,7 +19,7 @@ const selectNavCategories = (categories = []) =>
     .slice(0, 8);
 
 export default function Layout({ children, currentPageName }) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
   const { cartCount, openCart } = useCart();
   const { customer } = useCustomerAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,21 +39,31 @@ export default function Layout({ children, currentPageName }) {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Top announcement bar */}
-      <div className="bg-blue-900 text-white text-xs py-2 px-4 text-center">
+      <div className="custom-orange-bg text-white text-xs py-2 px-4 text-center">
         <span className="font-medium">🎉 Free shipping on orders over $50! Use code: </span>
-        <span className="font-bold text-orange-300">MEGADEAL</span>
+        <span className="font-bold ">MEGADEAL</span>
       </div>
 
       {/* Main header */}
       <header className="bg-white sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 md:px-8">
           <div className="flex items-center gap-4 h-16">
+            <button
+              type="button"
+              onClick={() => setCategoriesOpen(true)}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-gray-700 transition hover:bg-gray-100 hover:text-blue-800"
+              aria-label="Open categories"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+
             {/* Logo */}
-            <Link to={createPageUrl("Home")} className="flex-shrink-0">
-              <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">
+            <Link to={createPageUrl("Home")} className="flex-shrink-0 flex">
+            <img src={logo} alt="TrenchCart Logo" className="h-14 w-auto ms-2" />
+              {/* <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">
                 <span className="text-orange-500">Trench</span>
                 <span className="text-blue-900">Cart</span>
-              </h1>
+              </h1> */}
             </Link>
 
             {/* Search bar */}
@@ -98,12 +110,6 @@ export default function Layout({ children, currentPageName }) {
                     : "Account"}
                 </span>
               </Link>
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 text-gray-600"
-              >
-                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-              </button>
             </div>
           </div>
         </div>
@@ -147,55 +153,63 @@ export default function Layout({ children, currentPageName }) {
           </div>
         </nav>
 
-        {/* Mobile menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden bg-white border-t border-gray-100 p-4 space-y-3">
-            <form onSubmit={handleSearch} className="flex">
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search products..."
-                className="rounded-l-full rounded-r-none border-r-0 h-10"
-              />
-              <Button type="submit" className="rounded-l-none rounded-r-full bg-blue-800 h-10 px-4">
-                <Search className="w-4 h-4" />
-              </Button>
-            </form>
-            <div className="grid grid-cols-2 gap-2">
-              {navCategories.map((cat) => (
-                <a
-                  key={cat.slug}
-                  href={createPageUrl(`ProductListing?category=${cat.slug}`)}
-                  className="px-3 py-2 bg-gray-50 rounded-lg text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition text-center"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {cat.label}
-                </a>
-              ))}
+        <Sheet open={categoriesOpen} onOpenChange={setCategoriesOpen}>
+          <SheetContent side="left" className="w-80 bg-white p-0">
+            <div className="flex h-full flex-col">
+              <SheetHeader className="border-b border-gray-100 px-5 py-4 text-left">
+                <SheetTitle className="text-base">Browse Categories</SheetTitle>
+                <SheetDescription className="text-sm text-gray-500">
+                  Jump into any category from the left menu.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <div className="space-y-2">
+                  <Link
+                    to={createPageUrl("Home")}
+                    className="block rounded-xl px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-blue-50 hover:text-blue-800"
+                    onClick={() => setCategoriesOpen(false)}
+                  >
+                    Home
+                  </Link>
+                  <Link
+                    to={createPageUrl("ProductListing?featured=true")}
+                    className="block rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                    onClick={() => setCategoriesOpen(false)}
+                  >
+                    Deals
+                  </Link>
+                </div>
+                <div className="mt-5">
+                  <p className="px-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                    Categories
+                  </p>
+                  <div className="mt-3 space-y-1">
+                    {isLoadingCategories ? (
+                      <div className="space-y-2 px-3">
+                        {Array(5)
+                          .fill(0)
+                          .map((_, index) => (
+                            <div key={index} className="h-9 rounded-lg bg-gray-100 animate-pulse" />
+                          ))}
+                      </div>
+                    ) : (
+                      navCategories.map((cat) => (
+                        <Link
+                          key={cat.id}
+                          to={createPageUrl(`ProductListing?category=${cat.id}`)}
+                          className="block rounded-xl px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-blue-50 hover:text-blue-800"
+                          onClick={() => setCategoriesOpen(false)}
+                        >
+                          {cat.name}
+                        </Link>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-around pt-2 border-t">
-              <Link to={createPageUrl("MyOrders")} className="flex flex-col items-center text-gray-600 text-xs gap-1" onClick={() => setMobileMenuOpen(false)}>
-                <Heart className="w-5 h-5" /> Orders
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  openCart();
-                  setMobileMenuOpen(false);
-                }}
-                className="flex flex-col items-center text-gray-600 text-xs gap-1"
-              >
-                <ShoppingCart className="w-5 h-5" /> Cart
-                {cartCount > 0 && (
-                  <span className="text-[10px] font-semibold text-red-500">{cartCount}</span>
-                )}
-              </button>
-              <Link to={createPageUrl("MyOrders")} className="flex flex-col items-center text-gray-600 text-xs gap-1" onClick={() => setMobileMenuOpen(false)}>
-                <User className="w-5 h-5" /> Account
-              </Link>
-            </div>
-          </div>
-        )}
+          </SheetContent>
+        </Sheet>
       </header>
 
       {/* Trust bar */}

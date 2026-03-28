@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Star, Heart, ShoppingCart } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useCart } from "@/lib/CartContext";
+import { getProductPrimaryImage } from "@/utils/productImages";
 
 export default function ProductCard({ product, onAddToCart }) {
   const isOnSale = product.sale_price && product.sale_price < product.price;
@@ -21,9 +22,9 @@ export default function ProductCard({ product, onAddToCart }) {
   return (
     <Link
       to={`${createPageUrl("ProductDetail")}/${product.id}`}
-      className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl hover:border-transparent transition-all duration-300 flex flex-col"
+      className="group bg-white rounded-md border border-gray-100 overflow-hidden hover:shadow-xl hover:border-transparent transition-all duration-300 flex flex-col"
     >
-      <div className="relative bg-gray-50 p-4 flex items-center justify-center h-48">
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-50 sm:aspect-square">
         {discount > 0 && (
           <span className="absolute top-3 left-3 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
             -{discount}%
@@ -36,9 +37,9 @@ export default function ProductCard({ product, onAddToCart }) {
           <Heart className="w-4 h-4 text-gray-400 hover:text-red-500" />
         </button>
         <img
-          src={product.images?.[0] || product.image_url || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&q=80"}
+          src={getProductPrimaryImage(product, "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&q=80")}
           alt={product.name}
-          className="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-500"
+          className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500"
         />
       </div>
       <div className="p-4 flex-1 flex flex-col">
@@ -66,14 +67,14 @@ export default function ProductCard({ product, onAddToCart }) {
               <span className="text-lg font-bold text-gray-900">${product.price?.toFixed(2)}</span>
             )}
           </div>
-        <button
-          type="button"
-          onClick={handleAddToCart}
-          className="w-9 h-9 rounded-full bg-blue-700 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-blue-800 shadow-lg shadow-blue-700/30"
-        >
-          <ShoppingCart className="w-4 h-4" />
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={handleAddToCart}
+            className="w-9 h-9 rounded-full bg-blue-700 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-blue-800 shadow-lg shadow-blue-700/30"
+          >
+            <ShoppingCart className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </Link>
   );

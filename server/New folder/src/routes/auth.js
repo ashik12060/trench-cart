@@ -25,7 +25,7 @@ authRouter.post("/admin/login", async (req, res, next) => {
     const token = signAdminToken(user);
     res.cookie(AUTH_COOKIE, token, {
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       maxAge: 8 * 60 * 60 * 1000,
     });
@@ -39,7 +39,7 @@ authRouter.post("/admin/login", async (req, res, next) => {
 authRouter.post("/logout", (_req, res) => {
   res.clearCookie(AUTH_COOKIE, {
     httpOnly: true,
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
   });
   res.status(204).send();
