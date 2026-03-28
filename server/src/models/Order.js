@@ -34,6 +34,21 @@ const AddressSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const StatusHistorySchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      default: "pending",
+      enum: ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "refunded"],
+    },
+    label: { type: String, default: "Order placed" },
+    note: { type: String, default: "We received your order and are waiting for the first review." },
+    changed_at: { type: Date, default: Date.now },
+    changed_by: { type: String, default: "system" },
+  },
+  { _id: false },
+);
+
 const OrderSchema = new mongoose.Schema(
   {
     order_number: { type: String, default: "" },
@@ -54,6 +69,18 @@ const OrderSchema = new mongoose.Schema(
     tax: { type: Number, default: 0 },
     total: { type: Number, default: 0 },
     tracking_number: { type: String, default: "" },
+    status_history: {
+      type: [StatusHistorySchema],
+      default: () => [
+        {
+          status: "pending",
+          label: "Order placed",
+          note: "We received your order and are waiting for the first review.",
+          changed_at: new Date(),
+          changed_by: "system",
+        },
+      ],
+    },
     inventory_restocked: { type: Boolean, default: false },
     restocked_at: { type: Date, default: null },
     created_date: { type: Date, default: Date.now },

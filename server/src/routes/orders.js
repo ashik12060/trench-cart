@@ -5,6 +5,32 @@ import { findVariantByAttributes, recalcStockFromVariants } from "../utils/inven
 
 const RESTOCK_STATUSES = new Set(["cancelled", "refunded"]);
 const ITEM_RESTOCK_STATUSES = new Set(["returned", "cancelled", "refunded"]);
+const STATUS_LABELS = {
+  pending: "Order placed",
+  confirmed: "Confirmed",
+  processing: "Processing",
+  shipped: "Shipped",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+  refunded: "Refunded",
+};
+const STATUS_NOTES = {
+  pending: "We received your order and are waiting for the first review.",
+  confirmed: "Our team contacted the customer and confirmed the order details.",
+  processing: "Your items are being packed and prepared for dispatch.",
+  shipped: "The package has been handed to the courier.",
+  delivered: "The order has been delivered to the customer.",
+  cancelled: "The order was cancelled before completion.",
+  refunded: "The payment has been refunded back to the customer.",
+};
+
+const buildStatusHistoryEntry = (status) => ({
+  status,
+  label: STATUS_LABELS[status] || status,
+  note: STATUS_NOTES[status] || "Order status updated by the admin.",
+  changed_at: new Date(),
+  changed_by: "admin",
+});
 
 const restockOrderItem = async (item) => {
   if (!item?.product_id || !item?.quantity) return;
@@ -34,9 +60,18 @@ const restockOrderItem = async (item) => {
 export const ordersRouter = createCrudRouter(Order, {
   afterUpdate: async ({ prevDoc, updatedDoc }) => {
     if (!updatedDoc) return;
+    const previousStatus = prevDoc?.status;
+    const nextStatus = updatedDoc?.status;
+    let docChanged = false;
+
+    if (previousStatus !== nextStatus && nextStatus) {
+      const existingHistory = Array.isArray(updatedDoc.status_history) ? updatedDoc.status_history : [];
+      updatedDoc.status_history = [...existingHistory, buildStatusHistoryEntry(nextStatus)];
+      docChanged = true;
+    }
+
     const prevItems = Array.isArray(prevDoc?.items) ? prevDoc.items : [];
     const updatedItems = Array.isArray(updatedDoc.items) ? updatedDoc.items : [];
-    let docChanged = false;
 
     for (let index = 0; index < updatedItems.length; index += 1) {
       const item = updatedItems[index];

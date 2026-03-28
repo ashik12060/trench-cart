@@ -124,7 +124,7 @@ export default function AdminProducts() {
                           <p className="font-medium text-gray-800">{product.supplier_name}</p>
                           <p className="text-xs text-gray-400">
                             {product.supplier_purchase_quantity || 0} units tracked
-                            {supplier?.linked_products_count ? ` • ${supplier.linked_products_count} linked products` : ""}
+                            {supplier?.linked_products_count ? ` | ${supplier.linked_products_count} linked products` : ""}
                           </p>
                         </div>
                       ) : (
@@ -210,6 +210,11 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
   const computeVariantStock = (variants = []) =>
     variants.reduce((sum, variant) => sum + (parseInt(variant?.quantity, 10) || 0), 0);
 
+  const normalizeImageList = (images = []) =>
+    (Array.isArray(images) ? images : [])
+      .map((image) => String(image || "").trim())
+      .filter(Boolean);
+
   const syncStockWithVariants = (variants = [], current = {}) => ({
     ...current,
     variants,
@@ -229,7 +234,10 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
         ...product,
         supplier_available: Boolean(product.supplier_available),
       });
-      setForm(syncStockWithVariants(normalizedProduct.variants || [], normalizedProduct));
+      setForm({
+        ...syncStockWithVariants(normalizedProduct.variants || [], normalizedProduct),
+        images: normalizeImageList(normalizedProduct.images),
+      });
     } else {
       setForm(ensureClientBarcodes({
         name: "",
@@ -248,6 +256,7 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
         brand: "",
         weight: "",
         tags: [],
+        images: [],
         variants: [],
         supplier_available: false,
         supplier_id: "",
@@ -268,6 +277,7 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
       cleanData.low_stock_threshold = parseInt(cleanData.low_stock_threshold, 10) || 5;
       cleanData.weight = cleanData.weight ? parseFloat(cleanData.weight) : null;
       cleanData.stock_quantity = computeVariantStock(cleanData.variants);
+      cleanData.images = normalizeImageList(cleanData.images);
       cleanData.variants = (Array.isArray(cleanData.variants) ? cleanData.variants : []).map((variant) => ({
         sku: variant?.sku || "",
         size: variant?.size || "",
@@ -344,23 +354,86 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
   });
 
   const handleVariantImageUpload = async (variantIndex, event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
     try {
-      const { file_url } = await storeApi.uploads.image({ file });
-      setForm((prev) => {
-        const variants = [...(prev.variants || [])];
-        const currentImages = Array.isArray(variants[variantIndex]?.images) ? variants[variantIndex].images : [];
-        variants[variantIndex] = {
-          ...variants[variantIndex],
-          images: [...currentImages, file_url].filter(Boolean),
-        };
-        return syncStockWithVariants(variants, prev);
-      });
+      const uploadedUrls = [];
+      for (const file of files) {
+        const { file_url } = await storeApi.uploads.image({ file });
+        if (file_url) uploadedUrls.push(file_url);
+      }
+      if (uploadedUrls.length > 0) {
+        setForm((prev) => {
+          const variants = [...(prev.variants || [])];
+          const currentImages = Array.isArray(variants[variantIndex]?.images) ? variants[variantIndex].images : [];
+          variants[variantIndex] = {
+            ...variants[variantIndex],
+            images: [...currentImages, ...uploadedUrls].filter(Boolean),
+          };
+          return syncStockWithVariants(variants, prev);
+        });
+      }
     } catch (error) {
       toast.error(error.message || "Unable to upload variant image");
     } finally {
       event.target.value = "";
+    }
+  };
+
+  const addProductImage = () => {
+    setForm((prev) => ({
+      ...prev,
+      images: [...(prev.images || []), ""],
+    }));
+  };
+
+  const updateProductImage = (imageIndex, value) => {
+    setForm((prev) => {
+      const images = [...(prev.images || [])];
+      images[imageIndex] = value;
+      return {
+        ...prev,
+        images,
+      };
+    });
+  };
+
+  const removeProductImage = (imageIndex) => {
+    setForm((prev) => ({
+      ...prev,
+      images: (prev.images || []).filter((_, idx) => idx !== imageIndex),
+    }));
+  };
+
+  const handleProductImageUpload = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    try {
+      const uploadedUrls = [];
+      for (const file of files) {
+        const { file_url } = await storeApi.uploads.image({ file });
+        if (file_url) uploadedUrls.push(file_url);
+      }
+      if (uploadedUrls.length > 0) {
+        setForm((prev) => ({
+          ...prev,
+          images: [...(prev.images || []), ...uploadedUrls].filter(Boolean),
+        }));
+      }
+    } catch (error) {
+      toast.error(error.message || "Unable to upload product image");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const copyMediaLink = async (value) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success("Media link copied");
+    } catch {
+      toast.error("Unable to copy link");
     }
   };
 
@@ -371,6 +444,31 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
       variants[variantIndex] = {
         ...variants[variantIndex],
         images: currentImages.filter((_, idx) => idx !== imageIndex),
+      };
+      return syncStockWithVariants(variants, prev);
+    });
+  };
+
+  const addVariantImage = (variantIndex) => {
+    setForm((prev) => {
+      const variants = [...(prev.variants || [])];
+      const currentImages = Array.isArray(variants[variantIndex]?.images) ? variants[variantIndex].images : [];
+      variants[variantIndex] = {
+        ...variants[variantIndex],
+        images: [...currentImages, ""],
+      };
+      return syncStockWithVariants(variants, prev);
+    });
+  };
+
+  const updateVariantImage = (variantIndex, imageIndex, value) => {
+    setForm((prev) => {
+      const variants = [...(prev.variants || [])];
+      const currentImages = Array.isArray(variants[variantIndex]?.images) ? variants[variantIndex].images : [];
+      currentImages[imageIndex] = value;
+      variants[variantIndex] = {
+        ...variants[variantIndex],
+        images: currentImages,
       };
       return syncStockWithVariants(variants, prev);
     });
@@ -497,6 +595,59 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
           <div>
             <Label>Description</Label>
             <Textarea value={form.description || ""} onChange={(e) => update("description", e.target.value)} className="mt-1.5 h-24" />
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Media</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Add images by upload or paste links. Every uploaded file becomes a media URL you can copy and reuse.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" className="rounded-full" onClick={addProductImage}>
+                  Add media link
+                </Button>
+                <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-dashed border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400">
+                  <Upload className="h-4 w-4" />
+                  <span>Upload media</span>
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={handleProductImageUpload} />
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {(form.images || []).length === 0 ? (
+                <p className="text-sm text-slate-500">No product images yet.</p>
+              ) : (
+                (form.images || []).map((image, imageIndex) => (
+                  <div key={`product-image-${imageIndex}`} className="grid gap-3 md:grid-cols-[72px_minmax(0,1fr)_auto] md:items-center">
+                    <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border bg-white text-[10px] text-slate-400">
+                      {image ? (
+                        <img src={image} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <span>Preview</span>
+                      )}
+                    </div>
+                    <Input
+                      value={image || ""}
+                      onChange={(e) => updateProductImage(imageIndex, e.target.value)}
+                      placeholder="Paste media URL"
+                      className="bg-white"
+                    />
+                    <div className="flex items-center gap-1">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => copyMediaLink(image)} className="rounded-full px-3 text-xs">
+                        Copy link
+                      </Button>
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeProductImage(imageIndex)} className="h-9 w-9 rounded-full">
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -641,7 +792,7 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
                 <div className="rounded-xl border bg-white px-4 py-3 text-sm">
                   <p className="font-medium text-slate-900">{selectedSupplier.supplier_name}</p>
                   <p className="text-slate-500">
-                    {selectedSupplier.linked_products_count || 0} linked products • {selectedSupplier.purchased_units_total || 0} units purchased
+                    {selectedSupplier.linked_products_count || 0} linked products | {selectedSupplier.purchased_units_total || 0} units purchased
                   </p>
                 </div>
               ) : null}
@@ -739,29 +890,47 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
                     <div className="mt-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <p className="text-sm font-medium text-slate-900">Variant Images</p>
-                          <p className="text-xs text-slate-500">Upload one or more images for this exact variant.</p>
+                          <p className="text-sm font-medium text-slate-900">Variant Media</p>
+                          <p className="text-xs text-slate-500">Upload one or more files or paste links for this exact variant.</p>
                         </div>
-                        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-dashed border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400">
-                          <Upload className="h-4 w-4" />
-                          <span>Add image</span>
-                          <input type="file" accept="image/*" className="hidden" onChange={(event) => handleVariantImageUpload(index, event)} />
-                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" variant="outline" className="rounded-full" onClick={() => addVariantImage(index)}>
+                            Add media link
+                          </Button>
+                          <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-dashed border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400">
+                            <Upload className="h-4 w-4" />
+                            <span>Upload media</span>
+                            <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => handleVariantImageUpload(index, event)} />
+                          </label>
+                        </div>
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-3">
+                      <div className="mt-3 space-y-3">
                         {(variant.images || []).length === 0 ? (
                           <p className="text-sm text-slate-500">No variant images yet.</p>
                         ) : (
                           (variant.images || []).map((image, imageIndex) => (
-                            <div key={`${index}-${imageIndex}`} className="group relative h-20 w-20 overflow-hidden rounded-xl border bg-white">
-                              <img src={image} alt="" className="h-full w-full object-cover" />
-                              <button
-                                type="button"
-                                onClick={() => removeVariantImage(index, imageIndex)}
-                                className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
-                              >
-                                <Trash2 className="h-4 w-4 text-white" />
-                              </button>
+                            <div key={`${index}-${imageIndex}`} className="grid gap-3 md:grid-cols-[72px_minmax(0,1fr)_auto] md:items-center">
+                              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border bg-white text-[10px] text-slate-400">
+                                {image ? (
+                                  <img src={image} alt="" className="h-full w-full object-cover" />
+                                ) : (
+                                  <span>Preview</span>
+                                )}
+                              </div>
+                              <Input
+                                value={image || ""}
+                                onChange={(e) => updateVariantImage(index, imageIndex, e.target.value)}
+                                placeholder="Paste media URL"
+                                className="bg-white"
+                              />
+                              <div className="flex items-center gap-1">
+                                <Button type="button" variant="ghost" size="sm" onClick={() => copyMediaLink(image)} className="rounded-full px-3 text-xs">
+                                  Copy link
+                                </Button>
+                                <Button type="button" variant="ghost" size="icon" onClick={() => removeVariantImage(index, imageIndex)} className="h-9 w-9 rounded-full">
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
                             </div>
                           ))
                         )}

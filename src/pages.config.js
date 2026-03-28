@@ -53,6 +53,9 @@ import ProductDetail from './pages/ProductDetail';
 import Shop from './pages/Shop';
 import Checkout from './pages/Checkout';
 import MyOrders from './pages/MyOrders';
+import TrackOrder from './pages/TrackOrder';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminProducts from './pages/AdminProducts';
@@ -61,6 +64,7 @@ import AdminCategories from './pages/AdminCategories';
 import AdminOrders from './pages/AdminOrders';
 import AdminInventory from './pages/AdminInventory';
 import AdminBarcodes from './pages/AdminBarcodes';
+import AdminMedia from './pages/AdminMedia';
 import __Layout from './Layout.jsx';
 
 export const PAGES = {
@@ -70,6 +74,9 @@ export const PAGES = {
     "Shop": Shop,
     "Checkout": Checkout,
     "MyOrders": MyOrders,
+    "TrackOrder": TrackOrder,
+    "Login": Login,
+    "Signup": Signup,
     "admin/login": AdminLogin,
     "admin/dashboard": AdminDashboard,
     "admin/products": AdminProducts,
@@ -78,6 +85,7 @@ export const PAGES = {
     "admin/orders": AdminOrders,
     "admin/inventory": AdminInventory,
     "admin/barcodes": AdminBarcodes,
+    "admin/media": AdminMedia,
 }
 
 export const pagesConfig = {

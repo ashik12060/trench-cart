@@ -276,7 +276,7 @@ export default function ProductDetail() {
                 <img
                   src={activeGalleryImage}
                   alt={product.name}
-                  className={`max-h-[320px] max-w-[100%] object-contain transition-transform duration-200 ${
+                  className={`block w-[420px] h-[420px] mx-auto object-contain transition-transform duration-200 ${
                     zoom.active ? "scale-110" : "scale-100"
                   }`}
                   style={{

@@ -83,7 +83,7 @@ export default function Layout({ children, currentPageName }) {
 
             {/* Actions */}
             <div className="flex items-center gap-1 md:gap-3 ml-auto">
-            <Link to={createPageUrl("MyOrders")} className="hidden md:flex flex-col items-center px-2 py-1 text-gray-600 hover:text-blue-800 transition group">
+            <Link to={createPageUrl(customer ? "MyOrders" : "TrackOrder")} className="hidden md:flex flex-col items-center px-2 py-1 text-gray-600 hover:text-blue-800 transition group">
               <Heart className="w-5 h-5 group-hover:scale-110 transition-transform" />
               <span className="text-[10px] font-medium mt-0.5">
                 {customer ? "My Orders" : "Track Order"}
@@ -102,12 +102,12 @@ export default function Layout({ children, currentPageName }) {
                 )}
                 <span className="text-[10px] font-medium mt-0.5">Cart</span>
               </button>
-              <Link to={createPageUrl("MyOrders")} className="hidden md:flex flex-col items-center px-2 py-1 text-gray-600 hover:text-blue-800 transition group">
+              <Link to={createPageUrl(customer ? "MyOrders" : "Login")} className="hidden md:flex flex-col items-center px-2 py-1 text-gray-600 hover:text-blue-800 transition group">
                 <User className="w-5 h-5 group-hover:scale-110 transition-transform" />
                 <span className="text-[10px] font-medium mt-0.5">
                   {customer && customer.full_name
                     ? `Hi, ${customer.full_name.split(" ")[0]}`
-                    : "Account"}
+                    : "Login"}
                 </span>
               </Link>
             </div>

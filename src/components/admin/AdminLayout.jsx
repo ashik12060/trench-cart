@@ -1,7 +1,7 @@
 import React from "react";
 import clsx from "clsx";
 import { Link, NavLink } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Package, List, Box, LogOut, Eye, Truck, ScanLine } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Package, List, Box, LogOut, Eye, Truck, ScanLine, ImageUp } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 
 const navItems = [
@@ -11,6 +11,7 @@ const navItems = [
   { label: "Categories", to: "/admin/categories", icon: List },
   { label: "Inventory", to: "/admin/inventory", icon: Box },
   { label: "Barcodes", to: "/admin/barcodes", icon: ScanLine },
+  { label: "Media", to: "/admin/media", icon: ImageUp },
   { label: "Orders", to: "/admin/orders", icon: ShoppingBag },
 ];
 

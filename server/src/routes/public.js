@@ -139,8 +139,19 @@ publicRouter.post("/orders/checkout", optionalCustomer, async (req, res, next) =
 publicRouter.get("/orders/my", async (req, res, next) => {
   try {
     const customerEmail = normalizeEmail(req.query.customer_email || "");
-    if (!customerEmail) return res.json([]);
-    const orders = await Order.find({ customer_email: customerEmail }).sort({ created_date: -1 }).exec();
+    const orderNumber = normalizeString(req.query.order_number || "");
+
+    if (!customerEmail && !orderNumber) return res.json([]);
+
+    const query = {};
+    if (customerEmail) {
+      query.customer_email = customerEmail;
+    }
+    if (orderNumber) {
+      query.order_number = orderNumber;
+    }
+
+    const orders = await Order.find(query).sort({ created_date: -1 }).exec();
     res.json(orders);
   } catch (error) {
     next(error);
