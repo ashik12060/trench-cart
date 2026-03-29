@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { cloudinary } from "../config/cloudinary.js";
+import { MediaAsset } from "../models/MediaAsset.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -44,6 +45,27 @@ uploadsRouter.post("/image", upload.single("file"), async (req, res, next) => {
       folder: String(req.body.folder || "digitrench").trim() || "digitrench",
       publicId: String(req.body.public_id || "").trim(),
     });
+
+    const mediaData = {
+      name: String(req.file.originalname || "").trim(),
+      url: uploaded.secure_url,
+      size: req.file.size || 0,
+      type: String(req.file.mimetype || "image").trim(),
+      source: "upload",
+      folder: String(req.body.folder || "digitrench").trim() || "digitrench",
+      cloudinary_public_id: String(uploaded.public_id || "").trim(),
+    };
+
+    if (mediaData.cloudinary_public_id) {
+      await MediaAsset.findOneAndUpdate(
+        { cloudinary_public_id: mediaData.cloudinary_public_id },
+        mediaData,
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      );
+    } else {
+      await MediaAsset.create(mediaData);
+    }
+
     return res.json({ file_url: uploaded.secure_url });
   } catch (error) {
     next(error);

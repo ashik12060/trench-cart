@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Upload, Package } from "lucide-react";
 import { toast } from "sonner";
 import SearchBar from "@/components/store/SearchBar";
+import { getProductPrimaryImage } from "@/utils/productImages";
 import { buildVariantBarcode, createBarcodeSvgFile, ensureClientBarcodes, generateProductBarcode, normalizeClientBarcode } from "@/lib/barcodes";
 
 export default function AdminProducts() {
@@ -107,7 +108,7 @@ export default function AdminProducts() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <img
-                          src={product.images?.[0] || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=60&q=80"}
+                          src={getProductPrimaryImage(product, "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=60&q=80")}
                           alt=""
                           className="h-10 w-10 rounded-lg bg-gray-100 object-cover"
                         />

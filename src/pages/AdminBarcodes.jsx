@@ -114,7 +114,8 @@ export default function AdminBarcodes() {
           .barcode-print-grid {
             display: grid !important;
             grid-template-columns: repeat(auto-fit, minmax(1.5in, 1.5in)) !important;
-            gap: 0.15in !important;
+            gap: 0.12in !important;
+            align-content: start !important;
           }
 
           .barcode-label-card {
@@ -123,7 +124,15 @@ export default function AdminBarcodes() {
             box-shadow: none !important;
             width: 1.5in !important;
             height: 1in !important;
-            padding: 0.06in !important;
+            padding: 0 !important;
+            border: 0 !important;
+            background: #ffffff !important;
+          }
+
+          .barcode-label-actions,
+          .barcode-label-footer,
+          .barcode-label-meta {
+            display: none !important;
           }
         }
       `}</style>
@@ -139,25 +148,25 @@ export default function AdminBarcodes() {
             Print barcode images for products and variants so your team can track stock by size, color, and quantity.
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap">
           <Button
             type="button"
             variant="outline"
-            className="rounded-full"
+            className="w-full rounded-full sm:w-auto"
             onClick={() => generateMutation.mutate()}
             disabled={generateMutation.isPending}
           >
             <RefreshCw className={`mr-2 h-4 w-4 ${generateMutation.isPending ? "animate-spin" : ""}`} />
             {generateMutation.isPending ? "Syncing..." : "Generate Missing Barcodes"}
           </Button>
-          <Button type="button" className="rounded-full bg-slate-900 hover:bg-slate-700" onClick={() => window.print()}>
+          <Button type="button" className="w-full rounded-full bg-slate-900 hover:bg-slate-700 sm:w-auto" onClick={() => window.print()}>
             <Printer className="mr-2 h-4 w-4" />
             Print Visible Labels
           </Button>
         </div>
       </div>
 
-      <div className="barcode-print-controls grid gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:grid-cols-[1.6fr_220px_auto_auto] lg:items-end">
+      <div className="barcode-print-controls grid gap-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 lg:grid-cols-[1.6fr_220px_auto_auto] lg:items-end">
         <div>
           <Label>Search barcode</Label>
           <Input
@@ -208,7 +217,7 @@ export default function AdminBarcodes() {
           </p>
         </div>
       ) : (
-        <div className="barcode-print-grid grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="barcode-print-grid grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((entry) => (
             <BarcodeLabel key={entry.id} {...entry} />
           ))}

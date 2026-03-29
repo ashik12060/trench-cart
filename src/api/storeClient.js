@@ -145,6 +145,24 @@ const storeApi = {
       });
     },
   },
+  media: {
+    list(order, limit) {
+      const query = buildQuery({}, order, limit);
+      const suffix = query ? `?${query}` : "";
+      return request(`/admin/media${suffix}`);
+    },
+    create(data) {
+      return request("/admin/media", {
+        method: "POST",
+        body: data,
+      });
+    },
+    delete(id) {
+      return request(`/admin/media/${id}`, {
+        method: "DELETE",
+      });
+    },
+  },
   entities: {
     Product: {
       list(order, limit) {

@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { storeApi } from "@/api/storeClient";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { CheckCircle2, Copy, ImagePlus, Link2, Upload, X } from "lucide-react";
+import { Copy, ImagePlus, Link2, Upload, X } from "lucide-react";
 
 const formatBytes = (bytes = 0) => {
   if (!Number.isFinite(bytes) || bytes <= 0) return "Unknown size";
@@ -19,12 +20,31 @@ const formatBytes = (bytes = 0) => {
   return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 };
 
+
 export default function AdminMedia() {
   const [isUploading, setIsUploading] = useState(false);
-  const [files, setFiles] = useState([]);
+  const [isSavingLinks, setIsSavingLinks] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [bulkLinks, setBulkLinks] = useState("");
+  const queryClient = useQueryClient();
 
+  const { data: mediaItems = [], isLoading, isError, error } = useQuery({
+    queryKey: ["admin-media"],
+    queryFn: () => storeApi.media.list("-createdAt"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => storeApi.media.delete(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-media"] });
+      toast.success("Media removed");
+    },
+    onError: (error) => {
+      toast.error(error?.message || "Unable to remove media");
+    },
+  });
+
+  const files = useMemo(() => mediaItems || [], [mediaItems]);
   const allLinks = useMemo(() => files.map((file) => file.url).filter(Boolean), [files]);
 
   const copyToClipboard = async (value, label = "Link") => {
@@ -56,8 +76,8 @@ export default function AdminMedia() {
           });
         }
       }
-      setFiles((prev) => [...uploaded, ...prev]);
       toast.success(uploaded.length > 0 ? `Uploaded ${uploaded.length} file${uploaded.length > 1 ? "s" : ""}` : "No files uploaded");
+      await queryClient.invalidateQueries({ queryKey: ["admin-media"] });
     } catch (error) {
       toast.error(error?.message || "Unable to upload media");
     } finally {
@@ -77,7 +97,7 @@ export default function AdminMedia() {
     await addUploadedFiles(event.dataTransfer.files);
   };
 
-  const addBulkLinks = () => {
+  const addBulkLinks = async () => {
     const nextLinks = bulkLinks
       .split(/\r?\n/)
       .map((link) => link.trim())
@@ -88,22 +108,30 @@ export default function AdminMedia() {
       return;
     }
 
-    setFiles((prev) => [
-      ...nextLinks.map((url) => ({
-        id: `${url}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        name: url.split("/").pop() || "Linked media",
-        size: 0,
-        type: "link",
-        url,
-      })),
-      ...prev,
-    ]);
-    setBulkLinks("");
-    toast.success(`Added ${nextLinks.length} link${nextLinks.length > 1 ? "s" : ""}`);
-  };
+    setIsSavingLinks(true);
+    try {
+      try {
+        await Promise.all(
+          nextLinks.map((url) =>
+            storeApi.media.create({
+              name: url.split("/").pop() || "Linked media",
+              size: 0,
+              type: "link",
+              source: "link",
+              url,
+            }),
+          ),
+        );
+      } catch (error) {
+        toast.error(error?.message || "Unable to save some links to the server");
+      }
 
-  const removeItem = (id) => {
-    setFiles((prev) => prev.filter((item) => item.id !== id));
+      setBulkLinks("");
+      await queryClient.invalidateQueries({ queryKey: ["admin-media"] });
+      toast.success(`Added ${nextLinks.length} link${nextLinks.length > 1 ? "s" : ""}`);
+    } finally {
+      setIsSavingLinks(false);
+    }
   };
 
   return (
@@ -153,7 +181,7 @@ export default function AdminMedia() {
               </div>
               <Button type="button" variant="outline" className="rounded-full" onClick={addBulkLinks}>
                 <Link2 className="mr-2 h-4 w-4" />
-                Add links
+                {isSavingLinks ? "Adding..." : "Add links"}
               </Button>
             </div>
             <Textarea
@@ -181,7 +209,15 @@ https://example.com/image-2.jpg"
           </div>
 
           <div className="mt-4 space-y-3">
-            {files.length === 0 ? (
+            {isLoading && mediaItems.length === 0 ? (
+              <div className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">
+                Loading media...
+              </div>
+            ) : isError ? (
+              <div className="rounded-2xl bg-red-50 p-8 text-center text-sm text-red-600">
+                {error?.message || "Unable to load media."}
+              </div>
+            ) : files.length === 0 ? (
               <div className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">
                 No media yet. Upload files or paste links to build your library.
               </div>
@@ -216,7 +252,18 @@ https://example.com/image-2.jpg"
                           <Copy className="mr-2 h-4 w-4" />
                           Copy link
                         </Button>
-                        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" onClick={() => removeItem(file.id)}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10 rounded-full"
+                          onClick={() => {
+                            if (file.id) {
+                              deleteMutation.mutate(file.id);
+                            }
+                          }}
+                          disabled={deleteMutation.isPending}
+                        >
                           <X className="h-4 w-4 text-red-500" />
                         </Button>
                       </div>

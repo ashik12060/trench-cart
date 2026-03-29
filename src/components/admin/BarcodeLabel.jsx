@@ -142,12 +142,12 @@ export default function BarcodeLabel({
 
   return (
     <div className="barcode-label-card rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
+      <div className="barcode-label-meta flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-slate-900">{title}</p>
           <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">{kind === "variant" ? "Variant Label" : "Product Label"}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="barcode-label-actions flex items-center gap-2">
           <Badge className="border-0 bg-slate-900 text-white">{quantity} pcs</Badge>
           <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={handleDownload} title="Download barcode image">
             <Download className="h-4 w-4" />
@@ -165,7 +165,7 @@ export default function BarcodeLabel({
         />
       </div>
 
-      <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
+      <div className="barcode-label-footer mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
         <p className="text-center text-sm font-semibold tracking-[0.18em] text-slate-800">{barcode}</p>
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
           {sku ? <span>SKU: {sku}</span> : null}
