@@ -135,17 +135,19 @@ export default function AdminMedia() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2">
+    <div className="space-y-6 overflow-x-hidden">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Admin</p>
-        <h1 className="text-2xl font-bold text-gray-900">Media</h1>
-        <p className="text-sm text-gray-500">
-          Upload images here and copy the generated links for products, variants, banners, or any other place in the store.
-        </p>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-gray-900">Media</h1>
+          <p className="text-sm text-gray-500">
+            Upload images here and copy the generated links for products, variants, banners, or any other place in the store.
+          </p>
+        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="space-y-4">
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <div className="space-y-4 min-w-0">
           <div
             onDragEnter={() => setDragActive(true)}
             onDragLeave={() => setDragActive(false)}
@@ -174,12 +176,12 @@ export default function AdminMedia() {
           </div>
 
           <div className="rounded-3xl border bg-white p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <p className="text-sm font-semibold text-gray-900">Paste media links</p>
                 <p className="text-xs text-gray-500">One link per line. Useful for external images too.</p>
               </div>
-              <Button type="button" variant="outline" className="rounded-full" onClick={addBulkLinks}>
+              <Button type="button" variant="outline" className="w-full rounded-full sm:w-auto" onClick={addBulkLinks}>
                 <Link2 className="mr-2 h-4 w-4" />
                 {isSavingLinks ? "Adding..." : "Add links"}
               </Button>
@@ -194,14 +196,14 @@ https://example.com/image-2.jpg"
           </div>
         </div>
 
-        <div className="rounded-3xl border bg-white p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
+        <div className="min-w-0 rounded-3xl border bg-white p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-gray-900">Uploaded media</p>
               <p className="text-xs text-gray-500">{files.length} items ready to use</p>
             </div>
             {allLinks.length > 0 ? (
-              <Button type="button" variant="outline" className="rounded-full" onClick={() => copyToClipboard(allLinks.join("\n"), "All links")}>
+              <Button type="button" variant="outline" className="w-full rounded-full sm:w-auto" onClick={() => copyToClipboard(allLinks.join("\n"), "All links")}>
                 <Copy className="mr-2 h-4 w-4" />
                 Copy all
               </Button>
@@ -224,8 +226,8 @@ https://example.com/image-2.jpg"
             ) : (
               files.map((file) => (
                 <div key={file.id} className="rounded-2xl border border-slate-200 p-3">
-                  <div className="flex gap-3">
-                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border bg-slate-50">
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <div className="h-40 w-full shrink-0 overflow-hidden rounded-xl border bg-slate-50 sm:h-16 sm:w-16">
                       <img
                         src={file.url}
                         alt={file.name}
@@ -246,9 +248,9 @@ https://example.com/image-2.jpg"
                         </Badge>
                       </div>
 
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Input value={file.url} readOnly className="min-w-0 flex-1 bg-slate-50 text-xs" />
-                        <Button type="button" variant="outline" className="rounded-full" onClick={() => copyToClipboard(file.url, "Media link")}>
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                        <Input value={file.url} readOnly className="w-full min-w-0 flex-1 bg-slate-50 text-xs" />
+                        <Button type="button" variant="outline" className="w-full rounded-full sm:w-auto" onClick={() => copyToClipboard(file.url, "Media link")}>
                           <Copy className="mr-2 h-4 w-4" />
                           Copy link
                         </Button>
@@ -256,7 +258,7 @@ https://example.com/image-2.jpg"
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-10 w-10 rounded-full"
+                          className="h-10 w-10 rounded-full self-start sm:self-auto"
                           onClick={() => {
                             if (file.id) {
                               deleteMutation.mutate(file.id);
@@ -275,6 +277,7 @@ https://example.com/image-2.jpg"
           </div>
         </div>
       </div>
+
     </div>
   );
 }

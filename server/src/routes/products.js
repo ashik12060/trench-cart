@@ -218,6 +218,36 @@ router.post("/", async (req, res, next) => {
   }
 });
 
+router.post("/import", async (req, res, next) => {
+  try {
+    const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+    if (rows.length === 0) {
+      return res.status(400).json({ error: "Rows are required" });
+    }
+
+    const created = [];
+    const errors = [];
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      try {
+        const doc = await Product.create(await normalizeProductPayload(row));
+        created.push(doc);
+      } catch (error) {
+        errors.push({
+          row: index + 1,
+          name: String(row?.name || "").trim(),
+          error: error.message || "Unable to import row",
+        });
+      }
+    }
+
+    res.status(201).json({ created: created.length, errors, products: created });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.put("/:id", async (req, res, next) => {
   try {
     const existingDoc = await Product.findById(req.params.id);

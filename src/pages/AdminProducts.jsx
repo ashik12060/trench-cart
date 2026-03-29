@@ -10,8 +10,9 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Upload, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, Package, FileSpreadsheet, Download } from "lucide-react";
 import { toast } from "sonner";
+import Papa from "papaparse";
 import SearchBar from "@/components/store/SearchBar";
 import { getProductPrimaryImage } from "@/utils/productImages";
 import { buildVariantBarcode, createBarcodeSvgFile, ensureClientBarcodes, generateProductBarcode, normalizeClientBarcode } from "@/lib/barcodes";
@@ -19,6 +20,7 @@ import { buildVariantBarcode, createBarcodeSvgFile, ensureClientBarcodes, genera
 export default function AdminProducts() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [showImport, setShowImport] = useState(false);
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
 
@@ -70,15 +72,25 @@ export default function AdminProducts() {
           <h1 className="text-2xl font-bold text-gray-900">Products</h1>
           <p className="mt-1 text-sm text-gray-500">{products.length} products total</p>
         </div>
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setShowForm(true);
-          }}
-          className="rounded-full bg-gray-900 hover:bg-indigo-600"
-        >
-          <Plus className="mr-2 h-4 w-4" /> Add Product
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowImport(true)}
+            className="rounded-full"
+          >
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Import CSV
+          </Button>
+          <Button
+            onClick={() => {
+              setEditing(null);
+              setShowForm(true);
+            }}
+            className="rounded-full bg-gray-900 hover:bg-indigo-600"
+          >
+            <Plus className="mr-2 h-4 w-4" /> Add Product
+          </Button>
+        </div>
       </div>
 
       <div className="max-w-sm">
@@ -199,6 +211,12 @@ export default function AdminProducts() {
         product={editing}
         categories={categories}
         suppliers={suppliers}
+      />
+
+      <ProductCsvImportDialog
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        categories={categories}
       />
     </div>
   );
@@ -955,6 +973,334 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
             </Button>
           </div>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const CSV_TEMPLATE_COLUMNS = [
+  "name",
+  "sku",
+  "category_id",
+  "price",
+  "sale_price",
+  "discount_amount",
+  "cost_price",
+  "stock_quantity",
+  "low_stock_threshold",
+  "is_active",
+  "is_featured",
+  "brand",
+  "weight",
+  "short_description",
+  "description",
+  "supplier_available",
+  "supplier_id",
+  "supplier_purchase_quantity",
+  "tags",
+  "images",
+  "variants",
+];
+
+const createCsvTemplate = () =>
+  Papa.unparse([
+    {
+      name: "Classic T-Shirt",
+      sku: "TSH-001",
+      category_id: "category-id-here",
+      price: 25,
+      sale_price: "",
+      discount_amount: "",
+      cost_price: 12,
+      stock_quantity: 0,
+      low_stock_threshold: 5,
+      is_active: true,
+      is_featured: false,
+      brand: "TrenchCart",
+      weight: 0.25,
+      short_description: "Soft cotton everyday shirt",
+      description: "Use this row as a template for CSV imports.",
+      supplier_available: false,
+      supplier_id: "",
+      supplier_purchase_quantity: 0,
+      tags: "shirt|cotton|basic",
+      images: "https://example.com/image-1.jpg|https://example.com/image-2.jpg",
+      variants:
+        '[{"sku":"TSH-001-BLK-M","size":"M","color":"Black","quantity":10,"images":["https://example.com/variant-1.jpg"]}]',
+    },
+  ], {
+    columns: CSV_TEMPLATE_COLUMNS,
+    quotes: true,
+    header: true,
+  });
+
+const parseBooleanCell = (value, fallback = false) => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (["true", "1", "yes", "y", "active"].includes(normalized)) return true;
+  if (["false", "0", "no", "n", "inactive"].includes(normalized)) return false;
+  return fallback;
+};
+
+const parseNumberCell = (value, fallback = 0) => {
+  const parsed = Number(String(value ?? "").trim());
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const parseListCell = (value) =>
+  String(value ?? "")
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const parseVariantsCell = (value) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((variant) => ({
+      sku: String(variant?.sku || "").trim(),
+      size: String(variant?.size || "").trim(),
+      color: String(variant?.color || "").trim(),
+      quantity: parseNumberCell(variant?.quantity, 0),
+      images: Array.isArray(variant?.images)
+        ? variant.images.map((image) => String(image || "").trim()).filter(Boolean)
+        : parseListCell(variant?.images),
+      barcode: String(variant?.barcode || "").trim(),
+      barcode_image_url: String(variant?.barcode_image_url || "").trim(),
+    }));
+  } catch {
+    return [];
+  }
+};
+
+const normalizeImportedRow = (row) => ({
+  name: String(row?.name || "").trim(),
+  sku: String(row?.sku || "").trim(),
+  category_id: String(row?.category_id || "").trim(),
+  price: parseNumberCell(row?.price, 0),
+  sale_price: row?.sale_price === "" || row?.sale_price === null || row?.sale_price === undefined
+    ? null
+    : parseNumberCell(row?.sale_price, null),
+  discount_amount: parseNumberCell(row?.discount_amount, 0),
+  cost_price: row?.cost_price === "" || row?.cost_price === null || row?.cost_price === undefined
+    ? null
+    : parseNumberCell(row?.cost_price, null),
+  stock_quantity: parseNumberCell(row?.stock_quantity, 0),
+  low_stock_threshold: parseNumberCell(row?.low_stock_threshold, 5),
+  is_active: parseBooleanCell(row?.is_active, true),
+  is_featured: parseBooleanCell(row?.is_featured, false),
+  brand: String(row?.brand || "").trim(),
+  weight: row?.weight === "" || row?.weight === null || row?.weight === undefined
+    ? null
+    : parseNumberCell(row?.weight, null),
+  short_description: String(row?.short_description || "").trim(),
+  description: String(row?.description || "").trim(),
+  supplier_available: parseBooleanCell(row?.supplier_available, false),
+  supplier_id: String(row?.supplier_id || "").trim(),
+  supplier_purchase_quantity: parseNumberCell(row?.supplier_purchase_quantity, 0),
+  tags: parseListCell(row?.tags),
+  images: parseListCell(row?.images),
+  variants: parseVariantsCell(row?.variants),
+  barcode: String(row?.barcode || "").trim(),
+  barcode_image_url: String(row?.barcode_image_url || "").trim(),
+});
+
+function ProductCsvImportDialog({ open, onClose, categories }) {
+  const queryClient = useQueryClient();
+  const [selectedFileName, setSelectedFileName] = useState("");
+  const [previewRows, setPreviewRows] = useState([]);
+  const [parseError, setParseError] = useState("");
+  const [isParsing, setIsParsing] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [result, setResult] = useState(null);
+
+  React.useEffect(() => {
+    if (!open) {
+      setSelectedFileName("");
+      setPreviewRows([]);
+      setParseError("");
+      setIsParsing(false);
+      setIsImporting(false);
+      setResult(null);
+    }
+  }, [open]);
+
+  const downloadTemplate = () => {
+    const csv = createCsvTemplate();
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "trenchcart-products-template.csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const parseFile = async (file) => {
+    setIsParsing(true);
+    setParseError("");
+    setResult(null);
+    try {
+      const text = await file.text();
+      const parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: "greedy",
+        transformHeader: (header) => header.trim(),
+      });
+
+      if (parsed.errors?.length) {
+        throw new Error(parsed.errors[0].message || "Unable to parse CSV");
+      }
+
+      const rows = (parsed.data || [])
+        .map((row) => normalizeImportedRow(row))
+        .filter((row) => row.name);
+
+      if (rows.length === 0) {
+        throw new Error("No valid product rows found");
+      }
+
+      setPreviewRows(rows);
+      setSelectedFileName(file.name);
+      toast.success(`Parsed ${rows.length} row${rows.length > 1 ? "s" : ""}`);
+    } catch (error) {
+      setPreviewRows([]);
+      setParseError(error.message || "Unable to parse CSV");
+      toast.error(error.message || "Unable to parse CSV");
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await parseFile(file);
+    event.target.value = "";
+  };
+
+  const importRows = async () => {
+    if (previewRows.length === 0) {
+      toast.error("Upload a CSV file first");
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const response = await storeApi.entities.Product.import(previewRows);
+      setResult(response);
+      await queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-suppliers"] });
+      toast.success(`Imported ${response?.created || 0} product${response?.created === 1 ? "" : "s"}`);
+    } catch (error) {
+      toast.error(error.message || "Unable to import products");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Import Products from CSV</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            Use this when you already have product data in Excel. Keep one product per row, save the sheet as CSV, and upload it here.
+            <div className="mt-2 text-xs text-slate-500">
+              Categories must use the category ID from your Categories page. Images are separated with `|`. Variants should be JSON in one cell.
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" className="rounded-full" onClick={downloadTemplate}>
+              <Download className="mr-2 h-4 w-4" />
+              Download CSV Template
+            </Button>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-600">
+              <FileSpreadsheet className="h-4 w-4" />
+              {isParsing ? "Parsing..." : "Choose CSV file"}
+              <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileChange} />
+            </label>
+          </div>
+
+          {selectedFileName ? (
+            <p className="text-sm text-slate-500">Selected file: {selectedFileName}</p>
+          ) : null}
+
+          {parseError ? (
+            <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">{parseError}</div>
+          ) : null}
+
+          {result?.errors?.length ? (
+            <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
+              Imported with {result.errors.length} error{result.errors.length > 1 ? "s" : ""}. Fix the rows below if needed.
+            </div>
+          ) : null}
+
+          <div className="overflow-hidden rounded-2xl border">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Name</th>
+                    <th className="px-4 py-3 font-medium">SKU</th>
+                    <th className="px-4 py-3 font-medium">Category</th>
+                    <th className="px-4 py-3 font-medium">Price</th>
+                    <th className="px-4 py-3 font-medium">Images</th>
+                    <th className="px-4 py-3 font-medium">Variants</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
+                        Upload a CSV file to preview your rows here.
+                      </td>
+                    </tr>
+                  ) : (
+                    previewRows.map((row, index) => (
+                      <tr key={`${row.name}-${index}`} className="border-t">
+                        <td className="px-4 py-3">{row.name}</td>
+                        <td className="px-4 py-3">{row.sku || "-"}</td>
+                        <td className="px-4 py-3">{categories.find((cat) => cat.id === row.category_id)?.name || row.category_id || "-"}</td>
+                        <td className="px-4 py-3">${Number(row.price || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3">{Array.isArray(row.images) ? row.images.length : 0}</td>
+                        <td className="px-4 py-3">{Array.isArray(row.variants) ? row.variants.length : 0}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-500">
+              CSV rows ready: <span className="font-semibold text-slate-900">{previewRows.length}</span>
+            </p>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={onClose} className="rounded-full">
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="rounded-full bg-gray-900 hover:bg-indigo-600"
+                disabled={previewRows.length === 0 || isImporting}
+                onClick={importRows}
+              >
+                {isImporting ? "Importing..." : "Import CSV"}
+              </Button>
+            </div>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

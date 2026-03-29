@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { Link, NavLink } from "react-router-dom";
 import { LayoutDashboard, ShoppingBag, Package, List, Box, LogOut, Eye, Truck, ScanLine, ImageUp } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
+import logo from "@/assets/logo-removebd.png";
 
 const navItems = [
   { label: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard },
@@ -12,6 +13,7 @@ const navItems = [
   { label: "Inventory", to: "/admin/inventory", icon: Box },
   { label: "Barcodes", to: "/admin/barcodes", icon: ScanLine },
   { label: "Media", to: "/admin/media", icon: ImageUp },
+  { label: "Carousel", to: "/admin/carousel", icon: ImageUp },
   { label: "Orders", to: "/admin/orders", icon: ShoppingBag },
 ];
 
@@ -32,9 +34,10 @@ export default function AdminLayout({ children, currentPageName }) {
         <div>
           <div className="px-6 py-8 border-b border-slate-200">
             <Link to="/admin/dashboard" className="text-2xl font-bold tracking-tight text-slate-900">
-              Trench<span className="text-indigo-600">Cart</span>
+              
+              <img src={logo} alt="trenchcart logo" />
             </Link>
-            <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">Command Center</p>
+           
           </div>
           <nav className="px-4 py-6 space-y-1">
             {navItems.map((item) => (

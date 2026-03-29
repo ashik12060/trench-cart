@@ -1,89 +1,139 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { createPageUrl } from "@/utils";
+import { storeApi } from "@/api/storeClient";
 
-const slides = [
+const fallbackSlides = [
   {
-    title: "SMART WEARABLE.",
-    subtitle: "Best Deal Online on smart watches",
-    discount: "UP TO 80% OFF",
-    image: "https://images.unsplash.com/photo-1546868871-af0de0ae72be?w=600&q=80",
-    bg: "from-blue-900 to-blue-700",
-    cta: "Shop Now"
+    id: "fallback-1",
+    title: "Discover the Finest Products",
+    subtitle: "Curated collections of premium products, handpicked for quality and style.",
+    cta_label: "Shop Now",
+    image_url: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1600&q=80",
+    link_url: createPageUrl("Shop"),
   },
-  {
-    title: "PREMIUM LAPTOPS.",
-    subtitle: "Powerful performance for creators",
-    discount: "UP TO 40% OFF",
-    image: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=600&q=80",
-    bg: "from-slate-900 to-slate-700",
-    cta: "Explore"
-  },
-  {
-    title: "SMARTPHONES.",
-    subtitle: "Flagship phones at unbeatable prices",
-    discount: "UP TO 50% OFF",
-    image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&q=80",
-    bg: "from-indigo-900 to-indigo-700",
-    cta: "Buy Now"
-  }
 ];
+
+const resolveHref = (linkUrl = "") => {
+  const raw = String(linkUrl || "").trim();
+  if (!raw) return createPageUrl("Shop");
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("/")) return raw;
+  return `/${raw}`;
+};
+
+const isExternalLink = (value = "") => /^https?:\/\//i.test(String(value || "").trim());
+
+function SlideLink({ href, children, className }) {
+  if (isExternalLink(href)) {
+    return (
+      <a href={href} className={className} target="_blank" rel="noreferrer">
+        {children}
+      </a>
+    );
+  }
+
+  return (
+    <Link to={href} className={className}>
+      {children}
+    </Link>
+  );
+}
 
 export default function HeroBanner() {
   const [current, setCurrent] = useState(0);
+  const { data: slidesData = [] } = useQuery({
+    queryKey: ["carousel-slides"],
+    queryFn: () => storeApi.carouselSlides.list("sort_order,created_date"),
+  });
+
+  const slides = useMemo(() => (slidesData.length > 0 ? slidesData : fallbackSlides), [slidesData]);
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrent(p => (p + 1) % slides.length), 5000);
+    if (slides.length <= 1) return undefined;
+    const timer = setInterval(() => setCurrent((prev) => (prev + 1) % slides.length), 6000);
     return () => clearInterval(timer);
-  }, []);
+  }, [slides.length]);
 
-  const slide = slides[current];
+  useEffect(() => {
+    setCurrent(0);
+  }, [slides.length]);
+
+  const slide = slides[current % slides.length];
+  const href = resolveHref(slide.link_url);
 
   return (
-    <div className={`relative bg-gradient-to-r ${slide.bg} rounded-2xl overflow-hidden transition-all duration-700`}>
-      <div className="max-w-7xl mx-auto px-6 md:px-12 py-10 md:py-16 flex flex-col md:flex-row items-center gap-8">
-        <div className="flex-1 text-white z-10">
-          <p className="text-sm md:text-base font-medium text-blue-200 mb-2">{slide.subtitle}</p>
-          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight mb-3">
-            {slide.title}
-          </h1>
-          <p className="text-2xl md:text-3xl font-bold text-orange-400 mb-6">{slide.discount}</p>
-          <a href={createPageUrl("ProductListing")}>
-            <Button size="lg" className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-8 rounded-full shadow-lg shadow-orange-500/30">
-              {slide.cta}
-            </Button>
-          </a>
-          <div className="flex gap-2 mt-8">
-            {slides.map((_, i) => (
+    <div className="relative overflow-hidden rounded-3xl bg-slate-950 shadow-2xl shadow-slate-950/20">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={slide.id || slide.image_url || current}
+          initial={{ opacity: 0, scale: 1.01 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.45 }}
+          className="relative min-h-[290px] sm:min-h-[330px] lg:min-h-[380px]"
+        >
+          <div className="absolute inset-0">
+            <SlideLink href={href} className="block h-full w-full">
+              <img
+                src={slide.image_url}
+                alt={slide.title}
+                className="h-full w-full object-cover"
+              />
+            </SlideLink>
+            <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/40 to-black/10" />
+          </div>
+
+          <div className="relative z-10 min-h-[290px] px-4 py-5 sm:min-h-[330px] sm:px-6 sm:py-7 lg:min-h-[380px] lg:pl-14 lg:pr-10 lg:py-10">
+            <motion.div
+              initial={{ opacity: 0, x: -24 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.55 }}
+              className="mt-6 max-w-2xl text-white sm:mt-8 lg:mt-12"
+            >
+             
+              <h1 className="mt-2 text-xl font-black leading-tight sm:text-2xl md:text-3xl lg:text-4xl">
+                {slide.title}
+              </h1>
+              {slide.subtitle ? (
+                <p className="mt-2 max-w-xl text-xs leading-5 text-white/80 sm:text-sm">
+                  {slide.subtitle}
+                </p>
+              ) : null}
+
+              <div className="mt-6 flex flex-wrap items-center gap-3 sm:mt-8 lg:mt-10">
+                <SlideLink
+                  href={href}
+                  className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-600"
+                >
+                  {slide.cta_label || "Shop Now"}
+                  <ArrowRight className="h-4 w-4" />
+                </SlideLink>
+              </div>
+            </motion.div>
+
+          </div>
+
+          <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-black/20 px-3 py-2 backdrop-blur-sm sm:bottom-5 lg:bottom-6">
+            {slides.map((item, index) => (
               <button
-                key={i}
-                onClick={() => setCurrent(i)}
-                className={`w-3 h-3 rounded-full transition-all ${i === current ? 'bg-orange-400 w-8' : 'bg-white/40'}`}
+                key={item.id || `${item.title}-${index}`}
+                type="button"
+                onClick={() => setCurrent(index)}
+                className={`h-2.5 rounded-full transition-all duration-300 ${
+                  index === current ? "w-8 bg-orange-400" : "w-2.5 bg-white/40 hover:bg-white/60"
+                }`}
+                aria-label={`Go to slide ${index + 1}`}
               />
             ))}
           </div>
-        </div>
-        <div className="flex-1 flex justify-center">
-          <img
-            src={slide.image}
-            alt={slide.title}
-            className="w-64 h-64 md:w-80 md:h-80 object-cover rounded-2xl shadow-2xl transform hover:scale-105 transition-transform duration-500"
-          />
-        </div>
-      </div>
-      <button
-        onClick={() => setCurrent(p => (p - 1 + slides.length) % slides.length)}
-        className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 backdrop-blur rounded-full p-2 text-white transition"
-      >
-        <ChevronLeft className="w-5 h-5" />
-      </button>
-      <button
-        onClick={() => setCurrent(p => (p + 1) % slides.length)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 backdrop-blur rounded-full p-2 text-white transition"
-      >
-        <ChevronRight className="w-5 h-5" />
-      </button>
+        </motion.div>
+      </AnimatePresence>
+
     </div>
   );
 }

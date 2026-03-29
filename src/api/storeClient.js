@@ -163,6 +163,35 @@ const storeApi = {
       });
     },
   },
+  carouselSlides: {
+    list(order, limit) {
+      const query = buildQuery({}, order, limit);
+      const suffix = query ? `?${query}` : "";
+      return request(`/carousel-slides${suffix}`);
+    },
+    adminList(order, limit) {
+      const query = buildQuery({}, order, limit);
+      const suffix = query ? `?${query}` : "";
+      return request(`/admin/carousel-slides${suffix}`);
+    },
+    create(data) {
+      return request("/admin/carousel-slides", {
+        method: "POST",
+        body: data,
+      });
+    },
+    update(id, data) {
+      return request(`/admin/carousel-slides/${id}`, {
+        method: "PUT",
+        body: data,
+      });
+    },
+    delete(id) {
+      return request(`/admin/carousel-slides/${id}`, {
+        method: "DELETE",
+      });
+    },
+  },
   entities: {
     Product: {
       list(order, limit) {
@@ -178,17 +207,23 @@ const storeApi = {
         const suffix = query ? `?${query}` : "";
         return request(`/products${suffix}`);
       },
-      create(data) {
-        return request("/admin/products", {
-          method: "POST",
-          body: data,
-        });
-      },
-      update(id, data) {
-        return request(`/admin/products/${id}`, {
-          method: "PUT",
-          body: data,
-        });
+    create(data) {
+      return request("/admin/products", {
+        method: "POST",
+        body: data,
+      });
+    },
+    import(rows) {
+      return request("/admin/products/import", {
+        method: "POST",
+        body: { rows },
+      });
+    },
+    update(id, data) {
+      return request(`/admin/products/${id}`, {
+        method: "PUT",
+        body: data,
+      });
       },
       generateBarcodes() {
         return request("/admin/products/generate-barcodes", {

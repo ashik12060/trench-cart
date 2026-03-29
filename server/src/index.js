@@ -9,6 +9,7 @@ import { categoriesRouter } from "./routes/categories.js";
 import { ordersRouter } from "./routes/orders.js";
 import { suppliersRouter } from "./routes/suppliers.js";
 import { uploadsRouter } from "./routes/uploads.js";
+import { carouselSlidesRouter } from "./routes/carouselSlides.js";
 import { mediaRouter } from "./routes/media.js";
 import { authRouter } from "./routes/auth.js";
 import { requireAdmin } from "./middleware/auth.js";
@@ -43,6 +44,7 @@ app.use("/api/admin/products", requireAdmin, productsRouter);
 app.use("/api/admin/categories", requireAdmin, categoriesRouter);
 app.use("/api/admin/orders", requireAdmin, ordersRouter);
 app.use("/api/admin/suppliers", requireAdmin, suppliersRouter);
+app.use("/api/admin/carousel-slides", requireAdmin, carouselSlidesRouter);
 app.use("/api/admin/media", requireAdmin, mediaRouter);
 app.use("/api/uploads", requireAdmin, uploadsRouter);
 

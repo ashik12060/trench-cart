@@ -32,7 +32,7 @@ export default function CategoryGrid() {
           <ChevronRight className="w-4 h-4" />
         </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3  lg:grid-cols-6 gap-4">
         {isLoading
           ? Array(4)
             .fill(0)

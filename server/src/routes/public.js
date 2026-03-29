@@ -2,6 +2,7 @@ import { Router } from "express";
 import { Product } from "../models/Product.js";
 import { Category } from "../models/Category.js";
 import { Order } from "../models/Order.js";
+import { CarouselSlide } from "../models/CarouselSlide.js";
 import { parseFields, parseFilters, parseSort } from "../utils/query.js";
 import { findVariantByAttributes, recalcStockFromVariants } from "../utils/inventory.js";
 import { optionalCustomer } from "../middleware/auth.js";
@@ -33,6 +34,14 @@ const sanitizePublicProduct = (product) => {
 };
 
 export const publicRouter = Router();
+
+const sanitizeCarouselSlide = (slide) => {
+  const data = typeof slide?.toJSON === "function" ? slide.toJSON() : { ...(slide || {}) };
+  if (!data.id && data._id) {
+    data.id = String(data._id);
+  }
+  return data;
+};
 
 const normalizeShippingAddress = (shippingAddress = {}, fallbackPhone = "") => ({
   phone: normalizeString(shippingAddress.phone || fallbackPhone),
@@ -73,6 +82,15 @@ publicRouter.get("/categories", async (req, res, next) => {
         id: category.id || String(category._id),
       })),
     );
+  } catch (error) {
+    next(error);
+  }
+});
+
+publicRouter.get("/carousel-slides", async (req, res, next) => {
+  try {
+    const slides = await CarouselSlide.find({ is_active: true }).sort({ sort_order: 1, created_date: -1 }).lean().exec();
+    res.json(slides.map(sanitizeCarouselSlide));
   } catch (error) {
     next(error);
   }
