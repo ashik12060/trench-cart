@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Search, ShoppingCart, Heart, User, Menu, Truck, RotateCcw, ShieldCheck, Headphones } from "lucide-react";
+import { Search,  ShoppingCart, Heart, User, Menu, Truck, RotateCcw, ShieldCheck, Headphones, ShoppingBag } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -61,10 +61,7 @@ export default function Layout({ children, currentPageName }) {
             {/* Logo */}
             <Link to={createPageUrl("Home")} className="flex-shrink-0 flex">
             <img src={logo} alt="TrenchCart Logo" className="h-14 w-auto ms-2" />
-              {/* <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">
-                <span className="text-orange-500">Trench</span>
-                <span className="text-blue-900">Cart</span>
-              </h1> */}
+             
             </Link>
 
             {/* Search bar */}
@@ -85,7 +82,7 @@ export default function Layout({ children, currentPageName }) {
             {/* Actions */}
             <div className="flex items-center gap-1 md:gap-3 ml-auto">
             <Link to={createPageUrl(customer ? "MyOrders" : "TrackOrder")} className="hidden md:flex flex-col items-center px-2 py-1 text-gray-600 hover:text-blue-800 transition group">
-              <Heart className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <ShoppingBag className="w-5 h-5 group-hover:scale-110 transition-transform" />
               <span className="text-[10px] font-medium mt-0.5">
                 {customer ? "My Orders" : "Track Order"}
               </span>
