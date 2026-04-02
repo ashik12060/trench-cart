@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { storeApi } from "@/api/storeClient";
 import { useCart } from "@/lib/CartContext";
 import { useCustomerAuth } from "@/lib/CustomerAuthContext";
+import { getRootCategories } from "@/utils/categoryTree";
 import logo from '../src/assets/logo-removebd.png'
 
 const selectNavCategories = (categories = []) =>
@@ -27,7 +28,7 @@ export default function Layout({ children, currentPageName }) {
     queryKey: ["layout-categories"],
     queryFn: () => storeApi.entities.Category.filter({ is_active: true }, "sort_order"),
   });
-  const navCategories = selectNavCategories(categories);
+  const navCategories = selectNavCategories(getRootCategories(categories));
 
   const handleSearch = (e) => {
     e.preventDefault();

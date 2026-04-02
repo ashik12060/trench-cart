@@ -27,6 +27,14 @@ const statusColors = {
 
 const formatCurrency = (value) => `$${Number(value || 0).toFixed(2)}`;
 const getOrderPhone = (order) => order?.customer_phone || order?.shipping_address?.phone || "-";
+const getOrderProductSummary = (order) => {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  if (items.length === 0) return "-";
+  const firstName = items[0]?.product_name || "Item";
+  const extraCount = items.length - 1;
+  return extraCount > 0 ? `${firstName} + ${extraCount} more` : firstName;
+};
+const formatDateTime = (value) => (value ? format(new Date(value), "MMM d, yyyy h:mm a") : "-");
 const itemStatusOptions = ["pending", "confirmed", "processing", "shipped", "delivered", "returned", "cancelled", "refunded"];
 const orderStatusOptions = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "refunded"];
 
@@ -152,11 +160,11 @@ export default function AdminOrders() {
     });
     y += 34;
 
-    deliveredOrders.forEach((order) => {
+      deliveredOrders.forEach((order) => {
       const customerText = [order.customer_name, order.customer_email].filter(Boolean).join(" / ");
       const rowValues = [
         order.order_number || "-",
-        order.created_date ? format(new Date(order.created_date), "dd MMM yyyy") : "-",
+        formatDateTime(order.created_date),
         customerText || "-",
         order.status || "-",
         String((order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)),
@@ -433,8 +441,10 @@ export default function AdminOrders() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-left">
+                <th className="px-6 py-3 font-medium text-gray-500">#</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Order</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Customer</th>
+                <th className="px-6 py-3 font-medium text-gray-500">Product</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Items</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Total</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Status</th>
@@ -443,14 +453,19 @@ export default function AdminOrders() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((order) => (
+              {filtered.map((order, index) => (
                 <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
+                  <td className="px-6 py-4 text-gray-400">{index + 1}</td>
                   <td className="px-6 py-4 font-medium">{order.order_number}</td>
                   <td className="px-6 py-4">
                     <div>
                       <p className="text-gray-900">{order.customer_name}</p>
                       <p className="text-xs text-gray-400">{order.customer_email}</p>
                     </div>
+                  </td>
+                  <td className="px-6 py-4 text-gray-600">
+                    <p className="font-medium text-gray-900">{getOrderProductSummary(order)}</p>
+                    <p className="text-xs text-gray-400">{order.items?.length || 0} item line{(order.items?.length || 0) === 1 ? "" : "s"}</p>
                   </td>
                   <td className="px-6 py-4 text-gray-600">{order.items?.length || 0} items</td>
                   <td className="px-6 py-4 font-medium">{formatCurrency(order.total)}</td>
@@ -472,7 +487,7 @@ export default function AdminOrders() {
                     </Select>
                   </td>
                   <td className="px-6 py-4 text-gray-400">
-                    {order.created_date ? format(new Date(order.created_date), "MMM d, yyyy") : "-"}
+                    {formatDateTime(order.created_date)}
                   </td>
                   <td className="px-6 py-4">
                     <Button variant="ghost" size="icon" onClick={() => setSelectedOrder(order)}>
@@ -483,7 +498,7 @@ export default function AdminOrders() {
               ))}
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-400">
                     <ShoppingCart className="mx-auto mb-2 h-10 w-10 text-gray-200" />
                     No orders found
                   </td>

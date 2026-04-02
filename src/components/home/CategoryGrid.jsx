@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { storeApi } from '@/api/storeClient';
 import { createPageUrl } from '@/utils';
 import { ChevronRight, ArrowUpRight } from 'lucide-react';
+import { getRootCategories } from '@/utils/categoryTree';
 
 const defaultImages = [
   "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80",
@@ -19,7 +20,7 @@ export default function CategoryGrid() {
   });
 
   const activeCategories = useMemo(
-    () => categories.slice(0, 8),
+    () => getRootCategories(categories).slice(0, 8),
     [categories],
   );
 

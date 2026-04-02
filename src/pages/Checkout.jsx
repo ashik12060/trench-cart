@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { storeApi } from "@/api/storeClient";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -12,11 +12,14 @@ import { ChevronLeft, CreditCard, Banknote, Building2, Loader2, CheckCircle2 } f
 import { motion } from "framer-motion";
 import { useCart } from "@/lib/CartContext";
 import { useCustomerAuth } from "@/lib/CustomerAuthContext";
+import { downloadOrderInvoice } from "@/lib/invoice";
 
 export default function Checkout() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [orderNumber, setOrderNumber] = useState("");
+  const [placedOrder, setPlacedOrder] = useState(null);
+  const invoiceDownloadStarted = useRef(false);
   const { cart, subtotal, clearCart } = useCart();
   const { customer } = useCustomerAuth();
 
@@ -48,6 +51,12 @@ export default function Checkout() {
     }));
   }, [customer]);
 
+  useEffect(() => {
+    if (!orderPlaced || !placedOrder || invoiceDownloadStarted.current) return;
+    invoiceDownloadStarted.current = true;
+    downloadOrderInvoice(placedOrder);
+  }, [orderPlaced, placedOrder]);
+
   const shipping = subtotal > 50 ? 0 : 5.99;
   const tax = subtotal * 0.08;
   const total = subtotal + shipping + tax;
@@ -57,13 +66,14 @@ export default function Checkout() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    invoiceDownloadStarted.current = false;
 
     const orderNum = "ORD-" + Date.now().toString(36).toUpperCase();
     const normalizedEmail = (form.customer_email || customer?.email || "").trim().toLowerCase();
     const normalizedName =
       (form.customer_name || customer?.full_name || "Guest Shopper").trim() || "Guest Shopper";
 
-    await storeApi.entities.Order.create({
+    const createdOrder = await storeApi.entities.Order.create({
       order_number: orderNum,
       customer_email: normalizedEmail,
       customer_name: normalizedName,
@@ -99,6 +109,7 @@ export default function Checkout() {
 
     clearCart();
     setOrderNumber(orderNum);
+    setPlacedOrder(createdOrder);
     setOrderPlaced(true);
     setIsSubmitting(false);
   };
@@ -118,7 +129,19 @@ export default function Checkout() {
           Your order <span className="font-semibold text-gray-900">{orderNumber}</span> has been placed successfully.
         </p>
         <p className="text-gray-400 text-sm mt-2">You'll receive an email confirmation shortly.</p>
+        <p className="text-gray-500 text-sm mt-2">
+          Your invoice will download automatically. If it does not start, use the download button below.
+        </p>
         <div className="flex gap-3 justify-center mt-8">
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full px-6"
+            onClick={() => placedOrder && downloadOrderInvoice(placedOrder)}
+            disabled={!placedOrder}
+          >
+            Download Invoice
+          </Button>
           <Link to={createPageUrl("MyOrders")}>
             <Button variant="outline" className="rounded-full px-6">View My Orders</Button>
           </Link>
@@ -230,7 +253,11 @@ export default function Checkout() {
             <div className="space-y-3 mb-4">
               {cart.map((item) => (
                 <div key={item.cart_item_id} className="flex gap-3">
-                  <img src={item.images?.[0] || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=80&q=80"} alt="" className="w-14 h-14 rounded-lg object-cover bg-gray-50" />
+                  <img
+                    src={item.image_url || item.images?.[0] || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=80&q=80"}
+                    alt=""
+                    className="w-14 h-14 rounded-lg object-cover bg-gray-50"
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 line-clamp-1">{item.name}</p>
                     <p className="text-xs text-gray-500">Qty: {item.quantity}</p>

@@ -11,6 +11,8 @@ import { createPageUrl } from '@/utils';
 import { useCart } from "@/lib/CartContext";
 import { useParams, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
+import { getProductPrimaryImage } from "@/utils/productImages";
+import { getRootCategories } from "@/utils/categoryTree";
 
 export default function ProductDetail() {
   const [searchParams] = useSearchParams();
@@ -39,13 +41,14 @@ export default function ProductDetail() {
     queryKey: ['product-categories'],
     queryFn: () => storeApi.entities.Category.filter({ is_active: true }),
   });
+  const rootCategories = getRootCategories(categories);
   const categoryMap = useMemo(() => {
     const map = {};
-    categories.forEach((cat) => {
+    rootCategories.forEach((cat) => {
       map[cat.id] = cat.name;
     });
     return map;
-  }, [categories]);
+  }, [rootCategories]);
 
   const variants = product?.variants || [];
   const variantChecksum = useMemo(
@@ -145,7 +148,7 @@ export default function ProductDetail() {
     activeImage ||
     selectedVariantImages[0] ||
     galleryImages[0] ||
-    "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80";
+    getProductPrimaryImage(product, "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80");
 
   useEffect(() => {
     if (!galleryImages.length) {
@@ -188,7 +191,19 @@ export default function ProductDetail() {
 
   const handleAddToCart = () => {
     if (!product || isOutOfStock) return;
-    const extras = selectedVariant ? { variant: selectedVariant } : {};
+    const productImage = getProductPrimaryImage(product, "");
+    const extras = selectedVariant
+      ? {
+          variant: selectedVariant,
+          image_url:
+            selectedVariantImages[0] ||
+            activeGalleryImage ||
+            productImage ||
+            "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80",
+        }
+      : {
+          image_url: productImage || activeGalleryImage || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80",
+        };
     addToCart(product, qty, extras);
   };
 

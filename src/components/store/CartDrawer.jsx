@@ -43,7 +43,7 @@ export default function CartDrawer({ open, onClose, cart, updateQuantity, remove
                   className="flex gap-4 py-4 border-b last:border-0"
                 >
                   <img
-                    src={item.images?.[0] || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100&q=80"}
+                    src={item.image_url || item.images?.[0] || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100&q=80"}
                     alt={item.name}
                     className="w-20 h-20 rounded-xl object-cover bg-gray-50"
                   />

@@ -10,14 +10,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import ProductCard from "@/components/store/ProductCard";
 import SearchBar from "@/components/store/SearchBar";
 import { useCart } from "@/lib/CartContext";
+import { getRootCategories } from "@/utils/categoryTree";
 
 export default function Shop() {
   const urlParams = new URLSearchParams(window.location.search);
   const categoryFilter = urlParams.get("category");
+  const subcategoryFilter = urlParams.get("subcategory");
   const featuredFilter = urlParams.get("featured") === "true";
 
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(categoryFilter || "all");
+  const [selectedSubcategory, setSelectedSubcategory] = useState(subcategoryFilter || "all");
   const [sortBy, setSortBy] = useState("newest");
   const [priceRange, setPriceRange] = useState("all");
   const [showFeaturedOnly, setShowFeaturedOnly] = useState(featuredFilter);
@@ -33,6 +36,32 @@ export default function Shop() {
     queryKey: ["categories"],
     queryFn: () => storeApi.entities.Category.filter({ is_active: true }),
   });
+  const rootCategories = getRootCategories(categories);
+  const selectedCategoryObject = useMemo(
+    () => (selectedCategory !== "all" ? categories.find((category) => String(category.id) === String(selectedCategory)) || null : null),
+    [categories, selectedCategory],
+  );
+  const visibleSubcategories = useMemo(
+    () =>
+      selectedCategory !== "all"
+        ? categories.filter(
+            (category) =>
+              String(category.parent_category_id || "") === String(selectedCategory) &&
+              category.is_active !== false,
+          )
+        : [],
+    [categories, selectedCategory],
+  );
+
+  React.useEffect(() => {
+    if (selectedCategory === "all") {
+      setSelectedSubcategory("all");
+      return;
+    }
+    if (!visibleSubcategories.some((subcategory) => String(subcategory.id) === String(selectedSubcategory))) {
+      setSelectedSubcategory("all");
+    }
+  }, [selectedCategory, selectedSubcategory, visibleSubcategories]);
 
   const filteredProducts = useMemo(() => {
     let result = [...products];
@@ -46,6 +75,10 @@ export default function Shop() {
 
     if (selectedCategory !== "all") {
       result = result.filter((p) => p.category_id === selectedCategory);
+    }
+
+    if (selectedSubcategory !== "all") {
+      result = result.filter((p) => p.subcategory_id === selectedSubcategory);
     }
 
     if (showFeaturedOnly) {
@@ -69,7 +102,7 @@ export default function Shop() {
     }
 
     return result;
-  }, [products, search, selectedCategory, sortBy, priceRange, showFeaturedOnly]);
+  }, [products, search, selectedCategory, selectedSubcategory, sortBy, priceRange, showFeaturedOnly]);
 
   const FilterPanel = () => (
     <div className="space-y-6">
@@ -77,15 +110,23 @@ export default function Shop() {
         <h3 className="font-semibold text-sm text-gray-900 mb-3">Categories</h3>
         <div className="space-y-2">
           <button
-            onClick={() => setSelectedCategory("all")}
+            type="button"
+            onClick={() => {
+              setSelectedCategory("all");
+              setSelectedSubcategory("all");
+            }}
             className={`block w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedCategory === "all" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"}`}
           >
             All Categories
           </button>
-          {categories.map((cat) => (
+          {rootCategories.map((cat) => (
             <button
               key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
+              type="button"
+              onClick={() => {
+                setSelectedCategory(cat.id);
+                setSelectedSubcategory("all");
+              }}
               className={`block w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedCategory === cat.id ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"}`}
             >
               {cat.name}
@@ -93,6 +134,34 @@ export default function Shop() {
           ))}
         </div>
       </div>
+      {selectedCategory !== "all" ? (
+        <div>
+          <h3 className="font-semibold text-sm text-gray-900 mb-3">Subcategories</h3>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setSelectedSubcategory("all")}
+              className={`block w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedSubcategory === "all" ? "bg-blue-800 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+            >
+              All under {selectedCategoryObject?.name || "category"}
+            </button>
+            {visibleSubcategories.length > 0 ? (
+              visibleSubcategories.map((subcategory) => (
+                <button
+                  key={subcategory.id}
+                  type="button"
+                  onClick={() => setSelectedSubcategory(subcategory.id)}
+                  className={`block w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedSubcategory === subcategory.id ? "bg-blue-800 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                >
+                  {subcategory.name}
+                </button>
+              ))
+            ) : (
+              <p className="px-3 text-xs text-gray-400">No subcategories available.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
       <div>
         <h3 className="font-semibold text-sm text-gray-900 mb-3">Price Range</h3>
         <div className="space-y-2">
@@ -122,6 +191,18 @@ export default function Shop() {
         />
         <label htmlFor="featured" className="text-sm text-gray-700">Featured only</label>
       </div>
+      {(selectedCategory !== "all" || selectedSubcategory !== "all" || search) && (
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedCategory("all");
+            setSelectedSubcategory("all");
+          }}
+          className="flex items-center gap-1 text-left text-xs text-red-600 hover:text-red-700 font-medium"
+        >
+          <X className="w-3 h-3" /> Clear all filters
+        </button>
+      )}
     </div>
   );
 
@@ -138,7 +219,7 @@ export default function Shop() {
           <FilterPanel />
         </div>
 
-        <div className="flex-1">
+          <div className="flex-1">
           {/* Toolbar */}
           <div className="flex flex-wrap items-center gap-3 mb-6">
             <div className="flex-1 min-w-[200px]">

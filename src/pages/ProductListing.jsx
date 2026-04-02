@@ -6,15 +6,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getRootCategories } from "@/utils/categoryTree";
 
 export default function ProductListing() {
   const params = new URLSearchParams(window.location.search);
   const categoryParam = params.get("category") || "";
+  const subcategoryParam = params.get("subcategory") || "";
   const searchParam = params.get("search") || "";
   const featuredParam = params.get("featured") === "true";
 
   const [sortBy, setSortBy] = useState("relevance");
-  const [priceRange, setPriceRange] = useState([0, 5000]);
+  const [priceRange, setPriceRange] = useState([1, 5000]);
   const [showFilters, setShowFilters] = useState(false);
 
   const { data: products = [], isLoading } = useQuery({
@@ -26,6 +28,29 @@ export default function ProductListing() {
     queryKey: ['listing-categories'],
     queryFn: () => storeApi.entities.Category.filter({ is_active: true }),
   });
+  const rootCategories = getRootCategories(categories);
+  const selectedSubcategory = useMemo(() => {
+    if (!subcategoryParam) return null;
+    return categories.find((category) => String(category.id) === String(subcategoryParam)) || null;
+  }, [categories, subcategoryParam]);
+  const selectedCategoryObject = useMemo(() => {
+    const categoryId = categoryParam || selectedSubcategory?.parent_category_id || "";
+    if (!categoryId) return null;
+    return categories.find((category) => String(category.id) === String(categoryId)) || null;
+  }, [categories, categoryParam, selectedSubcategory?.parent_category_id]);
+  const effectiveCategoryId =
+    categoryParam || selectedSubcategory?.parent_category_id || "";
+  const visibleSubcategories = useMemo(
+    () =>
+      effectiveCategoryId
+        ? categories.filter(
+            (category) =>
+              String(category.parent_category_id || "") === String(effectiveCategoryId) &&
+              category.is_active !== false,
+          )
+        : [],
+    [categories, effectiveCategoryId],
+  );
 
   const categoryMap = useMemo(() => {
     const map = new Map();
@@ -40,8 +65,11 @@ export default function ProductListing() {
   const filtered = useMemo(() => {
     let result = [...products];
 
-    if (categoryParam) {
-      result = result.filter((p) => p.category_id === categoryParam);
+    if (effectiveCategoryId) {
+      result = result.filter((p) => p.category_id === effectiveCategoryId);
+    }
+    if (subcategoryParam) {
+      result = result.filter((p) => p.subcategory_id === subcategoryParam);
     }
     if (featuredParam) {
       result = result.filter(p => p.featured);
@@ -66,15 +94,30 @@ export default function ProductListing() {
       default: break;
     }
     return result;
-  }, [products, categoryParam, searchParam, featuredParam, sortBy, priceRange]);
+  }, [products, effectiveCategoryId, subcategoryParam, searchParam, featuredParam, sortBy, priceRange]);
 
-  const pageTitle = categoryParam
-    ? categoryMap.get(String(categoryParam)) || categoryParam
+  const handlePriceRangeChange = (nextRange) => {
+    const min = Math.max(1, Number(nextRange?.[0] || 1));
+    const max = Math.max(min, Number(nextRange?.[1] || min));
+    setPriceRange([min, max]);
+  };
+
+  const formatPrice = (value) => `Tk ${Number(value || 0).toLocaleString()}`;
+
+  const pageTitle = effectiveCategoryId
+    ? [
+        selectedCategoryObject?.name || categoryMap.get(String(effectiveCategoryId)) || effectiveCategoryId,
+        selectedSubcategory?.name || "",
+      ].filter(Boolean).join(" / ")
     : featuredParam
     ? "Hot Deals"
     : searchParam
     ? `Results for "${searchParam}"`
     : "All Products";
+
+  const clearHref = categoryParam || subcategoryParam || searchParam
+    ? "?"
+    : undefined;
 
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
@@ -107,6 +150,34 @@ export default function ProductListing() {
         </div>
       </div>
 
+      {effectiveCategoryId ? (
+        <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={`?category=${encodeURIComponent(effectiveCategoryId)}`}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                !subcategoryParam ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              All under {categoryMap.get(String(effectiveCategoryId)) || "category"}
+            </a>
+            {visibleSubcategories.map((subcategory) => (
+              <a
+                key={subcategory.id}
+                href={`?category=${encodeURIComponent(effectiveCategoryId)}&subcategory=${encodeURIComponent(subcategory.id)}`}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                  String(subcategoryParam) === String(subcategory.id)
+                    ? "bg-blue-800 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {subcategory.name}
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-col md:flex-row gap-6">
         {/* Sidebar filters */}
         <aside className={`${showFilters ? 'block' : 'hidden'} md:block w-full md:w-56 flex-shrink-0`}>
@@ -115,21 +186,21 @@ export default function ProductListing() {
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Categories</h3>
               <div className="flex flex-wrap gap-2">
                 <a
-                  href="?"
+                  href={clearHref || "?"}
                   className={`text-xs px-3 py-1.5 border transition ${
-                    !categoryParam
+                    !effectiveCategoryId
                       ? 'bg-blue-800 text-white border-blue-800'
                       : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-700'
                   }`}
                 >
                   All
                 </a>
-                {categories.map((category) => (
+                {rootCategories.map((category) => (
                   <a
                     key={category.id}
                     href={`?category=${encodeURIComponent(category.id)}`}
                     className={`text-xs px-3 py-1.5  border transition ${
-                      String(categoryParam) === String(category.id)
+                      String(effectiveCategoryId) === String(category.id)
                         ? 'bg-blue-800 text-white border-blue-800'
                         : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-700'
                     }`}
@@ -143,18 +214,18 @@ export default function ProductListing() {
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Price Range</h3>
               <Slider
                 value={priceRange}
-                onValueChange={setPriceRange}
-                min={0}
+                onValueChange={handlePriceRangeChange}
+                min={1}
                 max={5000}
                 step={50}
                 className="mt-2"
               />
               <div className="flex justify-between text-xs text-gray-500 mt-2">
-                <span>${priceRange[0]}</span>
-                <span>${priceRange[1]}</span>
+                <span>{formatPrice(priceRange[0])}</span>
+                <span>{formatPrice(priceRange[1])}</span>
               </div>
             </div>
-            {(categoryParam || searchParam) && (
+            {(effectiveCategoryId || subcategoryParam || searchParam) && (
               <a href="?" className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 font-medium">
                 <X className="w-3 h-3" /> Clear all filters
               </a>

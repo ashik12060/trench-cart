@@ -5,7 +5,7 @@ import HeroBanner from "@/components/home/HeroBanner";
 import CategoryGrid from "@/components/home/CategoryGrid";
 import DealSection from "@/components/home/DealSection";
 import PromoBanner from "@/components/home/PromoBanner";
-import BrandShowcase from "@/components/home/BrandShowcase";
+import { getRootCategories } from "@/utils/categoryTree";
 
 export default function Home() {
   const { data: featuredProducts = [], isLoading: loadingFeatured } = useQuery({
@@ -28,8 +28,9 @@ export default function Home() {
     queryFn: () =>
       storeApi.entities.Category.filter({ is_active: true }, "sort_order"),
   });
+  const rootCategories = getRootCategories(categories);
 
-  const categoryHighlights = categories.slice(0, 2).map((category) => ({
+  const categoryHighlights = rootCategories.slice(0, 2).map((category) => ({
     title: category.name,
     products: allProducts
       .filter((product) => product.category_id === category.id)

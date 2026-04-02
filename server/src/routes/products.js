@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { Product } from "../models/Product.js";
+import { Category } from "../models/Category.js";
 import { Supplier } from "../models/Supplier.js";
 import { parseFields, parseFilters, parseSort } from "../utils/query.js";
 import { buildProductBarcodeBase, buildVariantBarcode, generateProductBarcode, normalizeBarcodeValue } from "../utils/barcodes.js";
@@ -98,6 +99,8 @@ const normalizeProductPayload = async (body = {}, existingDoc = null) => {
     ...(existingDoc ? existingDoc.toObject() : {}),
     ...body,
   };
+  payload.category_id = String(payload.category_id || "").trim();
+  payload.subcategory_id = String(payload.subcategory_id || "").trim();
   const usedBarcodes = await getUsedBarcodes(existingDoc?.id || null);
   payload.variants = normalizeVariants(payload.variants);
   payload.barcode = createUniqueProductBarcode(payload, usedBarcodes, payload.barcode);
@@ -121,6 +124,19 @@ const normalizeProductPayload = async (body = {}, existingDoc = null) => {
       ? null
       : Number(payload.weight);
   payload.supplier_available = Boolean(payload.supplier_available);
+
+  if (payload.subcategory_id) {
+    const subcategory = await Category.findById(payload.subcategory_id).lean().exec();
+    if (!subcategory || !subcategory.parent_category_id) {
+      throw new Error("Please select a valid subcategory.");
+    } else if (payload.category_id && String(subcategory.parent_category_id) !== String(payload.category_id)) {
+      throw new Error("Selected subcategory must belong to the selected category.");
+    } else if (!payload.category_id) {
+      payload.category_id = String(subcategory.parent_category_id || "").trim();
+    }
+  } else {
+    throw new Error("Please select a subcategory for this product.");
+  }
 
   if (payload.discount_amount > 0 && payload.price > 0) {
     payload.discount_amount = Math.min(Math.max(payload.discount_amount, 0), payload.price);

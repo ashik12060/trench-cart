@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import CartDrawer from "@/components/store/CartDrawer";
+import { getProductPrimaryImage } from "@/utils/productImages";
 
 const CART_STORAGE_KEY = "megamart_cart";
 
@@ -69,11 +70,16 @@ export const CartProvider = ({ children }) => {
             item.cart_item_id === cartItemId ? { ...item, quantity: item.quantity + qty } : item
           );
         }
+        const imageUrl =
+          extras.image_url ||
+          (Array.isArray(extras.variant?.images) ? extras.variant.images.find((image) => String(image || "").trim()) : "") ||
+          getProductPrimaryImage(product, "");
         return [
           ...prev,
           {
             ...product,
             ...extras,
+            image_url: imageUrl,
             variant: extras.variant,
             variant_key: variantKey,
             cart_item_id: cartItemId,

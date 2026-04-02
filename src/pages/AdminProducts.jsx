@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import Papa from "papaparse";
 import SearchBar from "@/components/store/SearchBar";
 import { getProductPrimaryImage } from "@/utils/productImages";
+import { getRootCategories, getSubcategoriesByParent } from "@/utils/categoryTree";
 import { buildVariantBarcode, createBarcodeSvgFile, ensureClientBarcodes, generateProductBarcode, normalizeClientBarcode } from "@/lib/barcodes";
 
 export default function AdminProducts() {
@@ -31,7 +32,7 @@ export default function AdminProducts() {
 
   const { data: categories = [] } = useQuery({
     queryKey: ["admin-categories"],
-    queryFn: () => storeApi.entities.Category.list(),
+    queryFn: () => storeApi.entities.Category.list("sort_order"),
   });
 
   const { data: suppliers = [] } = useQuery({
@@ -59,6 +60,14 @@ export default function AdminProducts() {
   categories.forEach((category) => {
     categoryMap[category.id] = category.name;
   });
+  const subcategoryMap = {};
+  categories.forEach((category) => {
+    if (category.parent_category_id) {
+      subcategoryMap[category.id] = category.name;
+    }
+  });
+
+  const rootCategories = getRootCategories(categories);
 
   const supplierMap = {};
   suppliers.forEach((supplier) => {
@@ -130,7 +139,16 @@ export default function AdminProducts() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-gray-600">{categoryMap[product.category_id] || "-"}</td>
+                    <td className="px-6 py-4 text-gray-600">
+                      <div className="space-y-0.5">
+                        <p>{categoryMap[product.category_id] || "-"}</p>
+                        {product.subcategory_id ? (
+                          <p className="text-xs text-gray-400">
+                            {subcategoryMap[product.subcategory_id] || product.subcategory_id}
+                          </p>
+                        ) : null}
+                      </div>
+                    </td>
                     <td className="px-6 py-4">
                       {product.supplier_available && product.supplier_name ? (
                         <div>
@@ -210,6 +228,7 @@ export default function AdminProducts() {
         onClose={() => setShowForm(false)}
         product={editing}
         categories={categories}
+        rootCategories={rootCategories}
         suppliers={suppliers}
       />
 
@@ -222,7 +241,7 @@ export default function AdminProducts() {
   );
 }
 
-function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
+function ProductFormDialog({ open, onClose, product, categories, rootCategories, suppliers }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({});
 
@@ -256,6 +275,7 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
       setForm({
         ...syncStockWithVariants(normalizedProduct.variants || [], normalizedProduct),
         images: normalizeImageList(normalizedProduct.images),
+        subcategory_id: normalizedProduct.subcategory_id || "",
       });
     } else {
       setForm(ensureClientBarcodes({
@@ -268,6 +288,7 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
         cost_price: "",
         sku: "",
         category_id: "",
+        subcategory_id: "",
         stock_quantity: 0,
         low_stock_threshold: 5,
         is_active: true,
@@ -297,6 +318,10 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
       cleanData.weight = cleanData.weight ? parseFloat(cleanData.weight) : null;
       cleanData.stock_quantity = computeVariantStock(cleanData.variants);
       cleanData.images = normalizeImageList(cleanData.images);
+      cleanData.subcategory_id = String(cleanData.subcategory_id || "").trim();
+      if (!cleanData.subcategory_id) {
+        throw new Error("Please select a subcategory for this product.");
+      }
       cleanData.variants = (Array.isArray(cleanData.variants) ? cleanData.variants : []).map((variant) => ({
         sku: variant?.sku || "",
         size: variant?.size || "",
@@ -557,6 +582,12 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
     });
 
   const selectedSupplier = suppliers.find((supplier) => supplier.id === form.supplier_id);
+  const selectedSubcategory = categories.find((category) => String(category.id) === String(form.subcategory_id || ""));
+  const selectedCategoryId = String(form.category_id || selectedSubcategory?.parent_category_id || "").trim();
+  const availableSubcategories = selectedCategoryId
+    ? getSubcategoriesByParent(categories, selectedCategoryId).filter((category) => category.is_active !== false)
+    : [];
+  const derivedCategoryId = selectedSubcategory?.parent_category_id || selectedCategoryId;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -734,21 +765,65 @@ function ProductFormDialog({ open, onClose, product, categories, suppliers }) {
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
             <div>
               <Label>Category</Label>
-              <Select value={form.category_id || ""} onValueChange={(value) => update("category_id", value)}>
+              <Select
+                value={derivedCategoryId || ""}
+                onValueChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    category_id: value,
+                    subcategory_id: "",
+                  }))
+                }
+              >
                 <SelectTrigger className="mt-1.5">
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category) => (
+                  {rootCategories.map((category) => (
                     <SelectItem key={category.id} value={category.id}>
                       {category.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Subcategory *</Label>
+              <Select
+                value={form.subcategory_id || ""}
+                onValueChange={(value) => {
+                  const nextSubcategory = categories.find((category) => String(category.id) === String(value));
+                  setForm((prev) => ({
+                    ...prev,
+                    subcategory_id: value,
+                    category_id: nextSubcategory?.parent_category_id || prev.category_id || "",
+                  }));
+                }}
+                disabled={!selectedCategoryId || availableSubcategories.length === 0}
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue placeholder={selectedCategoryId ? "Select" : "Choose category first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableSubcategories.map((subcategory) => (
+                    <SelectItem key={subcategory.id} value={subcategory.id}>
+                      {subcategory.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedCategoryId && availableSubcategories.length === 0 ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  No subcategories found for this category yet.
+                </p>
+              ) : !selectedCategoryId ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  Choose a category first, then pick a subcategory.
+                </p>
+              ) : null}
             </div>
             <div>
               <Label>Stock Quantity</Label>
@@ -982,6 +1057,7 @@ const CSV_TEMPLATE_COLUMNS = [
   "name",
   "sku",
   "category_id",
+  "subcategory_id",
   "price",
   "sale_price",
   "discount_amount",
@@ -1008,6 +1084,7 @@ const createCsvTemplate = () =>
       name: "Classic T-Shirt",
       sku: "TSH-001",
       category_id: "category-id-here",
+      subcategory_id: "",
       price: 25,
       sale_price: "",
       discount_amount: "",
@@ -1080,6 +1157,7 @@ const normalizeImportedRow = (row) => ({
   name: String(row?.name || "").trim(),
   sku: String(row?.sku || "").trim(),
   category_id: String(row?.category_id || "").trim(),
+  subcategory_id: String(row?.subcategory_id || "").trim(),
   price: parseNumberCell(row?.price, 0),
   sale_price: row?.sale_price === "" || row?.sale_price === null || row?.sale_price === undefined
     ? null
@@ -1215,7 +1293,7 @@ function ProductCsvImportDialog({ open, onClose, categories }) {
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
             Use this when you already have product data in Excel. Keep one product per row, save the sheet as CSV, and upload it here.
             <div className="mt-2 text-xs text-slate-500">
-              Categories must use the category ID from your Categories page. Images are separated with `|`. Variants should be JSON in one cell.
+              Categories must use the category ID from your Categories page and subcategories should use the subcategory ID. Images are separated with `|`. Variants should be JSON in one cell.
             </div>
           </div>
 
@@ -1253,6 +1331,7 @@ function ProductCsvImportDialog({ open, onClose, categories }) {
                     <th className="px-4 py-3 font-medium">Name</th>
                     <th className="px-4 py-3 font-medium">SKU</th>
                     <th className="px-4 py-3 font-medium">Category</th>
+                    <th className="px-4 py-3 font-medium">Subcategory</th>
                     <th className="px-4 py-3 font-medium">Price</th>
                     <th className="px-4 py-3 font-medium">Images</th>
                     <th className="px-4 py-3 font-medium">Variants</th>
@@ -1261,7 +1340,7 @@ function ProductCsvImportDialog({ open, onClose, categories }) {
                 <tbody>
                   {previewRows.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
+                      <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
                         Upload a CSV file to preview your rows here.
                       </td>
                     </tr>
@@ -1271,6 +1350,7 @@ function ProductCsvImportDialog({ open, onClose, categories }) {
                         <td className="px-4 py-3">{row.name}</td>
                         <td className="px-4 py-3">{row.sku || "-"}</td>
                         <td className="px-4 py-3">{categories.find((cat) => cat.id === row.category_id)?.name || row.category_id || "-"}</td>
+                        <td className="px-4 py-3">{categories.find((cat) => cat.id === row.subcategory_id)?.name || row.subcategory_id || "-"}</td>
                         <td className="px-4 py-3">${Number(row.price || 0).toFixed(2)}</td>
                         <td className="px-4 py-3">{Array.isArray(row.images) ? row.images.length : 0}</td>
                         <td className="px-4 py-3">{Array.isArray(row.variants) ? row.variants.length : 0}</td>
