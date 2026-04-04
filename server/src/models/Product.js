@@ -28,6 +28,7 @@ const ProductSchema = new mongoose.Schema(
     barcode_image_url: { type: String, default: "", trim: true },
     category_id: { type: String, default: "" },
     subcategory_id: { type: String, default: "" },
+    sub_subcategory_id: { type: String, default: "" },
     stock_quantity: { type: Number, default: 0 },
     low_stock_threshold: { type: Number, default: 5 },
     is_active: { type: Boolean, default: true },
@@ -50,6 +51,7 @@ const ProductSchema = new mongoose.Schema(
 ProductSchema.index({ created_date: -1 });
 ProductSchema.index({ category_id: 1, created_date: -1 });
 ProductSchema.index({ subcategory_id: 1, created_date: -1 });
+ProductSchema.index({ sub_subcategory_id: 1, created_date: -1 });
 ProductSchema.index({ is_active: 1, created_date: -1 });
 ProductSchema.index({ sku: 1 });
 ProductSchema.index({ barcode: 1 });

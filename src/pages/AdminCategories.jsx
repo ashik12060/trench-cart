@@ -11,9 +11,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Upload, FolderTree, CornerDownRight } from "lucide-react";
 import { toast } from "sonner";
-import { getRootCategories, getSubcategoriesByParent } from "@/utils/categoryTree";
+import {
+  buildCategoryTree,
+  getCategoryDepth,
+  getCategoryDescendantIds,
+  getCategoryLineage,
+  getRootCategories,
+  getSubcategoriesByParent,
+} from "@/utils/categoryTree";
 
 const ROOT_CATEGORY_VALUE = "__root__";
+const MAX_NESTING_DEPTH = 2;
+
+const getCategoryTypeLabel = (depth) => {
+  if (depth <= 0) return "Category";
+  if (depth === 1) return "Subcategory";
+  return "Sub-subcategory";
+};
 
 export default function AdminCategories() {
   const [showForm, setShowForm] = useState(false);
@@ -35,25 +49,9 @@ export default function AdminCategories() {
     },
   });
 
-  const categoryTree = useMemo(() => {
-    const roots = getRootCategories(categories);
-    return roots.map((category) => ({
-      ...category,
-      children: getSubcategoriesByParent(categories, category.id),
-    }));
-  }, [categories]);
+  const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
 
-  const parentLookup = useMemo(() => {
-    const map = new Map();
-    categories.forEach((category) => {
-      if (category?.id) map.set(String(category.id), category);
-    });
-    return map;
-  }, [categories]);
-
-  const selectedCategory = selectedCategoryId
-    ? categories.find((category) => String(category.id) === String(selectedCategoryId))
-    : null;
+  const selectedCategory = selectedCategoryId ? categories.find((category) => String(category.id) === String(selectedCategoryId)) : null;
   const selectedSubcategories = selectedCategory
     ? getSubcategoriesByParent(categories, selectedCategory.id)
     : [];
@@ -158,7 +156,7 @@ export default function AdminCategories() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-semibold text-gray-900">{cat.name}</h3>
-                  <Badge className="border-0 bg-blue-100 text-blue-800">Category</Badge>
+                  <Badge className="border-0 bg-blue-100 text-blue-800">{getCategoryTypeLabel(0)}</Badge>
                   <Badge className={`border-0 ${cat.is_active !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                     {cat.is_active !== false ? "Active" : "Inactive"}
                   </Badge>
@@ -183,7 +181,7 @@ export default function AdminCategories() {
                 disabled={cat.children?.length > 0}
                 onClick={() => {
                   if (cat.children?.length > 0) {
-                    toast.error("Delete subcategories first");
+                    toast.error("Delete child categories first");
                     return;
                   }
                   deleteMutation.mutate(cat.id);
@@ -197,45 +195,24 @@ export default function AdminCategories() {
             <div className="mt-4 rounded-2xl bg-slate-50/70 p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Subcategories
+                  Nested Categories
                 </p>
                 <span className="text-xs text-slate-500">
-                  {cat.children?.length || 0} total
+                  {getCategoryDescendantIds(categories, cat.id).length || 0} total
                 </span>
               </div>
               {cat.children?.length ? (
                 <div className="mt-3 space-y-2">
                   {cat.children.map((child) => (
-                    <div
+                    <CategoryTreeItem
                       key={child.id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <CornerDownRight className="h-4 w-4 text-slate-400" />
-                          <p className="font-medium text-slate-900">{child.name}</p>
-                        </div>
-                        {child.description ? (
-                          <p className="mt-1 line-clamp-1 text-xs text-slate-500">{child.description}</p>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Badge className={`border-0 ${child.is_active !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                          {child.is_active !== false ? "Active" : "Inactive"}
-                        </Badge>
-                        <Button variant="ghost" size="sm" onClick={() => openCategoryForm(child, child.parent_category_id || "")}>
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteMutation.mutate(child.id)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
+                      category={child}
+                      categories={categories}
+                      depth={1}
+                      onEdit={(nextCategory) => openCategoryForm(nextCategory, nextCategory.parent_category_id || "")}
+                      onAddChild={(parentId) => openCategoryForm(null, parentId)}
+                      onDelete={(id) => deleteMutation.mutate(id)}
+                    />
                   ))}
                 </div>
               ) : (
@@ -274,7 +251,27 @@ function CategoryFormDialog({ open, onClose, category, categories, initialParent
   const [form, setForm] = useState({});
   const [uploading, setUploading] = useState(false);
 
-  const rootCategories = useMemo(() => getRootCategories(categories), [categories]);
+  const selectableParents = useMemo(() => {
+    const blockedIds = new Set(category?.id ? [String(category.id), ...getCategoryDescendantIds(categories, category.id)] : []);
+
+    return categories
+      .filter((item) => item?.id)
+      .filter((item) => !blockedIds.has(String(item.id)))
+      .filter((item) => getCategoryDepth(categories, item.id) < MAX_NESTING_DEPTH)
+      .sort((a, b) => {
+        const depthDifference = getCategoryDepth(categories, a.id) - getCategoryDepth(categories, b.id);
+        if (depthDifference !== 0) return depthDifference;
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      });
+  }, [categories, category]);
+
+  const initialParent = categories.find((item) => String(item.id) === String(initialParentId || ""));
+  const initialParentDepth = initialParent ? getCategoryDepth(categories, initialParent.id) : -1;
+  const dialogTitle = category
+    ? `Edit ${getCategoryTypeLabel(getCategoryDepth(categories, category.id))}`
+    : initialParentId
+      ? `Add ${getCategoryTypeLabel(Math.min(initialParentDepth + 1, MAX_NESTING_DEPTH))}`
+      : "Add Category";
 
   React.useEffect(() => {
     if (category) {
@@ -323,13 +320,11 @@ function CategoryFormDialog({ open, onClose, category, categories, initialParent
 
   const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
-  const selectableParents = rootCategories.filter((root) => root.id !== category?.id);
-
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{category ? "Edit Category" : initialParentId ? "Add Subcategory" : "Add Category"}</DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -349,13 +344,13 @@ function CategoryFormDialog({ open, onClose, category, categories, initialParent
               onValueChange={(value) => update("parent_category_id", value === ROOT_CATEGORY_VALUE ? "" : value)}
             >
               <SelectTrigger className="mt-1.5">
-                <SelectValue placeholder="Top-level category" />
+              <SelectValue placeholder="Top-level category" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ROOT_CATEGORY_VALUE}>Top-level category</SelectItem>
                 {selectableParents.map((parent) => (
                   <SelectItem key={parent.id} value={parent.id}>
-                    {parent.name}
+                    {`${"— ".repeat(getCategoryDepth(categories, parent.id))}${parent.name}`}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -363,6 +358,11 @@ function CategoryFormDialog({ open, onClose, category, categories, initialParent
             {initialParentId ? (
               <p className="mt-2 text-xs text-slate-500">
                 This category will be created under {categories.find((cat) => cat.id === initialParentId)?.name || "the selected parent"}.
+              </p>
+            ) : null}
+            {initialParentDepth >= MAX_NESTING_DEPTH ? (
+              <p className="mt-2 text-xs text-amber-600">
+                Categories support up to category, subcategory, and sub-subcategory levels.
               </p>
             ) : null}
           </div>
@@ -399,5 +399,73 @@ function CategoryFormDialog({ open, onClose, category, categories, initialParent
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function CategoryTreeItem({ category, categories, depth, onEdit, onAddChild, onDelete }) {
+  const childCount = category.children?.length || 0;
+  const hasChildren = childCount > 0;
+  const canAddChild = depth < MAX_NESTING_DEPTH;
+  const label = getCategoryTypeLabel(depth);
+  const lineage = getCategoryLineage(categories, category.id);
+  const parentName = lineage.length > 1 ? lineage[lineage.length - 2]?.name : "";
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <CornerDownRight className="h-4 w-4 text-slate-400" />
+            <p className="font-medium text-slate-900">{category.name}</p>
+            <Badge className="border-0 bg-slate-100 text-slate-700">{label}</Badge>
+          </div>
+          {parentName ? <p className="mt-1 text-xs text-slate-500">Under {parentName}</p> : null}
+          {category.description ? <p className="mt-1 line-clamp-1 text-xs text-slate-500">{category.description}</p> : null}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Badge className={`border-0 ${category.is_active !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+            {category.is_active !== false ? "Active" : "Inactive"}
+          </Badge>
+          <Button variant="ghost" size="sm" onClick={() => onEdit(category)}>
+            Edit
+          </Button>
+          {canAddChild ? (
+            <Button variant="ghost" size="sm" onClick={() => onAddChild(category.id)}>
+              {depth === 1 ? "Add Sub-subcategory" : "Add Child"}
+            </Button>
+          ) : null}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={hasChildren}
+            onClick={() => {
+              if (hasChildren) {
+                toast.error("Delete child categories first");
+                return;
+              }
+              onDelete(category.id);
+            }}
+            className="text-red-500 hover:text-red-700 disabled:cursor-not-allowed disabled:text-red-300"
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
+      {hasChildren ? (
+        <div className="space-y-2 pl-5">
+          {category.children.map((child) => (
+            <CategoryTreeItem
+              key={child.id}
+              category={child}
+              categories={categories}
+              depth={depth + 1}
+              onEdit={onEdit}
+              onAddChild={onAddChild}
+              onDelete={onDelete}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

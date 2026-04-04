@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import Papa from "papaparse";
 import SearchBar from "@/components/store/SearchBar";
 import { getProductPrimaryImage } from "@/utils/productImages";
-import { getRootCategories, getSubcategoriesByParent } from "@/utils/categoryTree";
+import { getCategoryById, getCategoryLineage, getRootCategories, getSubcategoriesByParent } from "@/utils/categoryTree";
 import { buildVariantBarcode, createBarcodeSvgFile, ensureClientBarcodes, generateProductBarcode, normalizeClientBarcode } from "@/lib/barcodes";
 
 export default function AdminProducts() {
@@ -276,6 +276,7 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
         ...syncStockWithVariants(normalizedProduct.variants || [], normalizedProduct),
         images: normalizeImageList(normalizedProduct.images),
         subcategory_id: normalizedProduct.subcategory_id || "",
+        sub_subcategory_id: normalizedProduct.sub_subcategory_id || "",
       });
     } else {
       setForm(ensureClientBarcodes({
@@ -289,6 +290,7 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
         sku: "",
         category_id: "",
         subcategory_id: "",
+        sub_subcategory_id: "",
         stock_quantity: 0,
         low_stock_threshold: 5,
         is_active: true,
@@ -319,6 +321,7 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
       cleanData.stock_quantity = computeVariantStock(cleanData.variants);
       cleanData.images = normalizeImageList(cleanData.images);
       cleanData.subcategory_id = String(cleanData.subcategory_id || "").trim();
+      cleanData.sub_subcategory_id = String(cleanData.sub_subcategory_id || "").trim();
       if (!cleanData.subcategory_id) {
         throw new Error("Please select a subcategory for this product.");
       }
@@ -582,12 +585,20 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
     });
 
   const selectedSupplier = suppliers.find((supplier) => supplier.id === form.supplier_id);
-  const selectedSubcategory = categories.find((category) => String(category.id) === String(form.subcategory_id || ""));
-  const selectedCategoryId = String(form.category_id || selectedSubcategory?.parent_category_id || "").trim();
+  const selectedLeafCategory = getCategoryById(categories, form.sub_subcategory_id || form.subcategory_id || "");
+  const selectedLineage = getCategoryLineage(categories, form.sub_subcategory_id || form.subcategory_id || "");
+  const selectedRootCategory = selectedLineage[0] || null;
+  const selectedSubcategory = selectedLineage[1] || null;
+  const selectedSubsubcategory = selectedLineage[2] || null;
+  const selectedCategoryId = String(form.category_id || selectedRootCategory?.id || "").trim();
   const availableSubcategories = selectedCategoryId
     ? getSubcategoriesByParent(categories, selectedCategoryId).filter((category) => category.is_active !== false)
     : [];
-  const derivedCategoryId = selectedSubcategory?.parent_category_id || selectedCategoryId;
+  const availableSubsubcategories = selectedSubcategory?.id
+    ? getSubcategoriesByParent(categories, selectedSubcategory.id).filter((category) => category.is_active !== false)
+    : [];
+  const derivedCategoryId = selectedRootCategory?.id || selectedCategoryId;
+  const derivedSubcategoryId = form.subcategory_id || selectedSubcategory?.id || (selectedLeafCategory && !selectedSubsubcategory ? selectedLeafCategory.id : "");
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -765,7 +776,7 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-5">
             <div>
               <Label>Category</Label>
               <Select
@@ -775,6 +786,7 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
                     ...prev,
                     category_id: value,
                     subcategory_id: "",
+                    sub_subcategory_id: "",
                   }))
                 }
               >
@@ -793,12 +805,13 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
             <div>
               <Label>Subcategory *</Label>
               <Select
-                value={form.subcategory_id || ""}
+                value={derivedSubcategoryId || ""}
                 onValueChange={(value) => {
                   const nextSubcategory = categories.find((category) => String(category.id) === String(value));
                   setForm((prev) => ({
                     ...prev,
                     subcategory_id: value,
+                    sub_subcategory_id: "",
                     category_id: nextSubcategory?.parent_category_id || prev.category_id || "",
                   }));
                 }}
@@ -822,6 +835,40 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
               ) : !selectedCategoryId ? (
                 <p className="mt-2 text-xs text-slate-500">
                   Choose a category first, then pick a subcategory.
+                </p>
+              ) : null}
+            </div>
+            <div>
+              <Label>Sub-subcategory</Label>
+              <Select
+                value={form.sub_subcategory_id || selectedSubsubcategory?.id || ""}
+                onValueChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    sub_subcategory_id: value,
+                    category_id: selectedCategoryId || prev.category_id || "",
+                  }))
+                }
+                disabled={!selectedSubcategory?.id || availableSubsubcategories.length === 0}
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue placeholder={selectedSubcategory?.id ? "Optional" : "Choose subcategory first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableSubsubcategories.map((subcategory) => (
+                    <SelectItem key={subcategory.id} value={subcategory.id}>
+                      {subcategory.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedSubcategory?.id && availableSubsubcategories.length === 0 ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  No sub-subcategories found under this subcategory.
+                </p>
+              ) : !selectedSubcategory?.id ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  Pick a subcategory first if you want a third level.
                 </p>
               ) : null}
             </div>

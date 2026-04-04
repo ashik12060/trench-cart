@@ -94,6 +94,22 @@ const createVariantBarcodes = (variants = [], parentBarcode = "", usedBarcodes) 
     };
   });
 
+const getCategoryLineage = async (categoryId = "") => {
+  const lineage = [];
+  const seen = new Set();
+  let currentId = String(categoryId || "").trim();
+
+  while (currentId && !seen.has(currentId)) {
+    seen.add(currentId);
+    const category = await Category.findById(currentId).lean().exec();
+    if (!category) break;
+    lineage.unshift(category);
+    currentId = String(category.parent_category_id || "").trim();
+  }
+
+  return lineage;
+};
+
 const normalizeProductPayload = async (body = {}, existingDoc = null) => {
   const payload = {
     ...(existingDoc ? existingDoc.toObject() : {}),
@@ -101,6 +117,7 @@ const normalizeProductPayload = async (body = {}, existingDoc = null) => {
   };
   payload.category_id = String(payload.category_id || "").trim();
   payload.subcategory_id = String(payload.subcategory_id || "").trim();
+  payload.sub_subcategory_id = String(payload.sub_subcategory_id || "").trim();
   const usedBarcodes = await getUsedBarcodes(existingDoc?.id || null);
   payload.variants = normalizeVariants(payload.variants);
   payload.barcode = createUniqueProductBarcode(payload, usedBarcodes, payload.barcode);
@@ -125,15 +142,34 @@ const normalizeProductPayload = async (body = {}, existingDoc = null) => {
       : Number(payload.weight);
   payload.supplier_available = Boolean(payload.supplier_available);
 
-  if (payload.subcategory_id) {
-    const subcategory = await Category.findById(payload.subcategory_id).lean().exec();
-    if (!subcategory || !subcategory.parent_category_id) {
+  const selectedLeafId = payload.sub_subcategory_id || payload.subcategory_id;
+
+  if (selectedLeafId) {
+    const categoryLineage = await getCategoryLineage(selectedLeafId);
+    const rootCategory = categoryLineage[0] || null;
+    const normalizedSubcategory = categoryLineage[1] || null;
+    const normalizedSubSubcategory = categoryLineage[2] || null;
+
+    if (!rootCategory || !normalizedSubcategory) {
       throw new Error("Please select a valid subcategory.");
-    } else if (payload.category_id && String(subcategory.parent_category_id) !== String(payload.category_id)) {
-      throw new Error("Selected subcategory must belong to the selected category.");
-    } else if (!payload.category_id) {
-      payload.category_id = String(subcategory.parent_category_id || "").trim();
     }
+
+    if (payload.sub_subcategory_id) {
+      if (!normalizedSubSubcategory || String(normalizedSubSubcategory.id) !== String(payload.sub_subcategory_id)) {
+        throw new Error("Please select a valid sub-subcategory.");
+      }
+      if (payload.subcategory_id && String(normalizedSubcategory.id) !== String(payload.subcategory_id)) {
+        throw new Error("Selected sub-subcategory must belong to the selected subcategory.");
+      }
+    }
+
+    if (payload.category_id && String(rootCategory.id) !== String(payload.category_id)) {
+      throw new Error("Selected subcategory must belong to the selected category.");
+    }
+
+    payload.category_id = String(rootCategory.id || "").trim();
+    payload.subcategory_id = String(normalizedSubcategory.id || "").trim();
+    payload.sub_subcategory_id = normalizedSubSubcategory ? String(normalizedSubSubcategory.id || "").trim() : "";
   } else {
     throw new Error("Please select a subcategory for this product.");
   }
