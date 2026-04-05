@@ -109,6 +109,7 @@ const normalizeProductPayload = async (body = {}, existingDoc = null) => {
     ? computeVariantStock(payload.variants)
     : Number(payload.stock_quantity || 0);
   payload.low_stock_threshold = Number(payload.low_stock_threshold || 5);
+  payload.delivery_days = Math.max(0, Number(payload.delivery_days || 0));
   payload.price = Number(payload.price || 0);
   payload.sale_price =
     payload.sale_price === "" || payload.sale_price === null || payload.sale_price === undefined

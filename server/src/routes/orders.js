@@ -2,6 +2,7 @@ import { createCrudRouter } from "./crud.js";
 import { Order } from "../models/Order.js";
 import { Product } from "../models/Product.js";
 import { findVariantByAttributes, recalcStockFromVariants } from "../utils/inventory.js";
+import { enrichOrdersWithItemImages } from "../utils/orderImages.js";
 
 const RESTOCK_STATUSES = new Set(["cancelled", "refunded"]);
 const ITEM_RESTOCK_STATUSES = new Set(["returned", "cancelled", "refunded"]);
@@ -58,6 +59,7 @@ const restockOrderItem = async (item) => {
 };
 
 export const ordersRouter = createCrudRouter(Order, {
+  afterFindMany: enrichOrdersWithItemImages,
   afterUpdate: async ({ prevDoc, updatedDoc }) => {
     if (!updatedDoc) return;
     const previousStatus = prevDoc?.status;

@@ -1,15 +1,16 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { storeApi } from "@/api/storeClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
-import { Eye, ShoppingCart, Download, FileSpreadsheet } from "lucide-react";
+import { Eye, ShoppingCart, Download, FileSpreadsheet, Trash2 } from "lucide-react";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
 import SearchBar from "@/components/store/SearchBar";
@@ -34,7 +35,57 @@ const getOrderProductSummary = (order) => {
   const extraCount = items.length - 1;
   return extraCount > 0 ? `${firstName} + ${extraCount} more` : firstName;
 };
-const formatDateTime = (value) => (value ? format(new Date(value), "MMM d, yyyy h:mm a") : "-");
+const toValidDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+const formatDateTime = (value) => {
+  const parsed = toValidDate(value);
+  return parsed ? format(parsed, "MMM d, yyyy h:mm a") : "-";
+};
+const formatDateOnly = (value) => {
+  const parsed = toValidDate(value);
+  return parsed ? format(parsed, "MMM d, yyyy") : "-";
+};
+const addDays = (date, days) => new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+const getItemDeliveryDays = (item) => Math.max(0, Number(item?.delivery_days || 0));
+const getItemDueDate = (item, orderCreatedDate) => {
+  const explicitDueDate = toValidDate(item?.delivery_due_date);
+  if (explicitDueDate) return explicitDueDate;
+  const deliveryDays = getItemDeliveryDays(item);
+  if (!orderCreatedDate || deliveryDays <= 0) return null;
+  return addDays(orderCreatedDate, deliveryDays);
+};
+const getItemDeliveryLabel = (item) => {
+  const deliveryDays = getItemDeliveryDays(item);
+  return deliveryDays > 0 ? `${deliveryDays} day${deliveryDays === 1 ? "" : "s"}` : null;
+};
+const getOrderDueDate = (order) => {
+  const explicitDueDate = toValidDate(order?.delivery_due_date);
+  if (explicitDueDate) return explicitDueDate;
+  const orderCreatedDate = toValidDate(order?.created_date);
+  if (!orderCreatedDate) return null;
+  const itemDueDates = (order.items || [])
+    .map((item) => getItemDueDate(item, orderCreatedDate))
+    .filter(Boolean);
+  if (itemDueDates.length === 0) return null;
+  return itemDueDates.reduce((latest, date) => (date > latest ? date : latest));
+};
+const getOrderDeliveryDays = (order) => {
+  const days = (order?.items || [])
+    .map((item) => getItemDeliveryDays(item))
+    .filter((value) => value > 0);
+  if (days.length === 0) return null;
+  return Math.max(...days);
+};
+const getProductPrimaryImage = (product = {}) => {
+  const directImages = Array.isArray(product?.images) ? product.images : [];
+  const variantImages = Array.isArray(product?.variants)
+    ? product.variants.flatMap((variant) => (Array.isArray(variant?.images) ? variant.images : []))
+    : [];
+  return [...directImages, ...variantImages].find((image) => String(image || "").trim()) || product?.image_url || "";
+};
 const itemStatusOptions = ["pending", "confirmed", "processing", "shipped", "delivered", "returned", "cancelled", "refunded"];
 const orderStatusOptions = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "refunded"];
 
@@ -43,13 +94,30 @@ export default function AdminOrders() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [pageSize, setPageSize] = useState("10");
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState(() => new Set());
   const queryClient = useQueryClient();
 
   const { data: orders = [] } = useQuery({
     queryKey: ["admin-orders"],
     queryFn: () => storeApi.entities.Order.list("-created_date"),
   });
+
+  const { data: products = [] } = useQuery({
+    queryKey: ["admin-orders-products"],
+    queryFn: () => storeApi.entities.Product.adminList("-created_date"),
+  });
+
+  const productImageMap = useMemo(() => {
+    const map = new Map();
+    products.forEach((product) => {
+      if (!product?.id) return;
+      map.set(String(product.id), getProductPrimaryImage(product));
+    });
+    return map;
+  }, [products]);
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => storeApi.entities.Order.update(id, data),
@@ -61,6 +129,85 @@ export default function AdminOrders() {
       toast.success("Order updated");
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => storeApi.entities.Order.delete(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      setSelectedOrderIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      if (selectedOrder?.id === id) {
+        setSelectedOrder(null);
+      }
+      toast.success("Order deleted");
+    },
+    onError: (error) => {
+      toast.error(error?.message || "Unable to delete order");
+    },
+  });
+
+  const getOrderItemImage = (item) =>
+    item?.image_url ||
+    (item?.product_id ? productImageMap.get(String(item.product_id)) : "") ||
+    "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=50&q=80";
+  const getOrderPreviewImage = (order) => getOrderItemImage(order?.items?.[0]);
+
+  useEffect(() => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set([...prev].filter((id) => orders.some((order) => order.id === id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [orders]);
+
+  const setOrderSelected = (orderId, checked) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(orderId);
+      else next.delete(orderId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllVisible = (checked) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        visibleOrderIds.forEach((id) => next.add(id));
+      } else {
+        visibleOrderIds.forEach((id) => next.delete(id));
+      }
+      return next;
+    });
+  };
+
+  const deleteSelectedOrders = async () => {
+    const ids = filtered.filter((order) => selectedOrderIds.has(order.id)).map((order) => order.id);
+    if (ids.length === 0) {
+      toast.info("Select at least one order to delete");
+      return;
+    }
+    const confirmed = window.confirm(`Delete ${ids.length} order${ids.length === 1 ? "" : "s"}? This cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      await Promise.all(ids.map((id) => storeApi.entities.Order.delete(id)));
+      setSelectedOrderIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+      if (selectedOrder && ids.includes(selectedOrder.id)) {
+        setSelectedOrder(null);
+      }
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      toast.success(`Deleted ${ids.length} order${ids.length === 1 ? "" : "s"}`);
+    } catch (error) {
+      toast.error(error?.message || "Unable to delete selected orders");
+    }
+  };
 
   const filtered = orders.filter((order) => {
     const matchSearch =
@@ -75,6 +222,25 @@ export default function AdminOrders() {
     const matchTo = !toBoundary || (createdAt && createdAt <= toBoundary);
     return matchSearch && matchStatus && matchFrom && matchTo;
   });
+  const rowsPerPage = Number(pageSize) || 10;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * rowsPerPage;
+  const paginatedOrders = filtered.slice(startIndex, startIndex + rowsPerPage);
+  const visibleOrderIds = paginatedOrders.map((order) => order.id);
+  const filteredOrderIds = filtered.map((order) => order.id);
+  const selectedCount = selectedOrderIds.size;
+  const filteredSelectedCount = filtered.filter((order) => selectedOrderIds.has(order.id)).length;
+  const allVisibleSelected = visibleOrderIds.length > 0 && visibleOrderIds.every((id) => selectedOrderIds.has(id));
+  const someVisibleSelected = visibleOrderIds.some((id) => selectedOrderIds.has(id));
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, dateFrom, dateTo, pageSize]);
 
   const downloadSalesReport = () => {
     const deliveredOrders = filtered.filter((order) => order.status === "delivered");
@@ -406,6 +572,25 @@ export default function AdminOrders() {
             <FileSpreadsheet className="mr-2 h-4 w-4" />
             Download Sales Report
           </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            className="rounded-full"
+            onClick={deleteSelectedOrders}
+            disabled={selectedCount === 0}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete Selected{selectedCount > 0 ? ` (${selectedCount})` : ""}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full"
+            onClick={() => toggleSelectAllVisible(!allVisibleSelected)}
+            disabled={filteredOrderIds.length === 0}
+          >
+            {allVisibleSelected ? "Clear Selection" : "Select All Visible"}
+          </Button>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[180px_180px_auto] lg:items-end">
@@ -433,72 +618,146 @@ export default function AdminOrders() {
               {filtered.length} matching orders
             </div>
           </div>
+          <div className="flex items-center gap-3">
+            <div className="min-w-[140px]">
+              <Label>Rows per page</Label>
+              <Select value={pageSize} onValueChange={setPageSize}>
+                <SelectTrigger className="mt-1.5 rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="self-end text-xs text-slate-500">
+              {filteredSelectedCount} selected
+            </div>
+          </div>
         </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border bg-white">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[1280px] text-sm">
             <thead>
               <tr className="bg-gray-50 text-left">
-                <th className="px-6 py-3 font-medium text-gray-500">#</th>
-                <th className="px-6 py-3 font-medium text-gray-500">Order</th>
-                <th className="px-6 py-3 font-medium text-gray-500">Customer</th>
-                <th className="px-6 py-3 font-medium text-gray-500">Product</th>
-                <th className="px-6 py-3 font-medium text-gray-500">Items</th>
-                <th className="px-6 py-3 font-medium text-gray-500">Total</th>
-                <th className="px-6 py-3 font-medium text-gray-500">Status</th>
-                <th className="px-6 py-3 font-medium text-gray-500">Date</th>
-                <th className="px-6 py-3 font-medium text-gray-500">Actions</th>
+                <th className="px-3 py-3 font-medium text-gray-500">
+                  <Checkbox
+                    checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                    onCheckedChange={(checked) => toggleSelectAllVisible(Boolean(checked))}
+                  />
+                </th>
+                <th className="px-4 py-3 font-medium text-gray-500">#</th>
+                <th className="px-4 py-3 font-medium text-gray-500">Order</th>
+                <th className="px-4 py-3 font-medium text-gray-500">Customer</th>
+                <th className="px-4 py-3 font-medium text-gray-500">Photo</th>
+                <th className="px-4 py-3 font-medium text-gray-500">Product</th>
+                <th className="px-4 py-3 font-medium text-gray-500">Items</th>
+                <th className="px-4 py-3 font-medium text-gray-500">Total</th>
+                <th className="px-4 py-3 font-medium text-gray-500">Status</th>
+                
+                <th className="px-4 py-3 font-medium text-gray-500">Date</th>
+                <th className="px-4 py-3 font-medium text-gray-500">Due Date</th>
+                <th className="px-4 py-3 font-medium text-gray-500">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((order, index) => (
-                <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="px-6 py-4 text-gray-400">{index + 1}</td>
-                  <td className="px-6 py-4 font-medium">{order.order_number}</td>
-                  <td className="px-6 py-4">
-                    <div>
-                      <p className="text-gray-900">{order.customer_name}</p>
-                      <p className="text-xs text-gray-400">{order.customer_email}</p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">
-                    <p className="font-medium text-gray-900">{getOrderProductSummary(order)}</p>
-                    <p className="text-xs text-gray-400">{order.items?.length || 0} item line{(order.items?.length || 0) === 1 ? "" : "s"}</p>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">{order.items?.length || 0} items</td>
-                  <td className="px-6 py-4 font-medium">{formatCurrency(order.total)}</td>
-                  <td className="px-6 py-4">
-                    <Select
-                      value={order.status}
-                      onValueChange={(value) => updateMutation.mutate({ id: order.id, data: { status: value } })}
-                    >
-                      <SelectTrigger className="h-8 w-32 rounded-full text-xs">
-                        <Badge className={`${statusColors[order.status]} border-0 capitalize`}>{order.status}</Badge>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {orderStatusOptions.map((status) => (
-                          <SelectItem key={status} value={status} className="capitalize">
-                            {status}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </td>
-                  <td className="px-6 py-4 text-gray-400">
-                    {formatDateTime(order.created_date)}
-                  </td>
-                  <td className="px-6 py-4">
-                    <Button variant="ghost" size="icon" onClick={() => setSelectedOrder(order)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {paginatedOrders.map((order, index) => {
+                const dueDate = getOrderDueDate(order);
+                const deliveryDays = getOrderDeliveryDays(order);
+                const previewImage = getOrderPreviewImage(order);
+
+                return (
+                  <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
+                    <td className="px-3 py-3 align-top">
+                      <Checkbox
+                        checked={selectedOrderIds.has(order.id)}
+                        onCheckedChange={(checked) => setOrderSelected(order.id, Boolean(checked))}
+                      />
+                    </td>
+                    <td className="px-4 py-3 align-top text-gray-400">{startIndex + index + 1}</td>
+                    <td className="px-4 py-3 align-top font-medium">{order.order_number}</td>
+                    <td className="px-4 py-3 align-top">
+                      <div>
+                        <p className="text-gray-900">{order.customer_name}</p>
+                        <p className="text-xs text-gray-400">{order.customer_email}</p>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <img
+                        src={previewImage}
+                        alt={order.items?.[0]?.product_name || "Ordered item"}
+                        className="h-10 w-10 rounded-lg object-cover ring-1 ring-gray-100"
+                      />
+                    </td>
+                    <td className="px-4 py-3 align-top text-gray-600">
+                      <p className="font-medium text-gray-900">{getOrderProductSummary(order)}</p>
+                      <p className="text-xs text-gray-400">
+                        {order.items?.length || 0} item line{(order.items?.length || 0) === 1 ? "" : "s"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 align-top text-gray-600">{order.items?.length || 0}</td>
+                    <td className="px-4 py-3 align-top font-medium">{formatCurrency(order.total)}</td>
+                    <td className="px-4 py-3 align-top">
+                      <Select
+                        value={order.status}
+                        onValueChange={(value) => updateMutation.mutate({ id: order.id, data: { status: value } })}
+                      >
+                        <SelectTrigger className="h-8 w-32 rounded-full text-xs">
+                          <Badge className={`${statusColors[order.status]} border-0 capitalize`}>{order.status}</Badge>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {orderStatusOptions.map((status) => (
+                            <SelectItem key={status} value={status} className="capitalize">
+                              {status}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="px-4 py-3 align-top text-gray-800">
+                      {formatDateTime(order.created_date)}
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-red-600">
+                          {formatDateOnly(dueDate)}
+                        </span>
+                        <span className="text-[11px] text-red-400">Delivery due</span>
+                        {deliveryDays ? (
+                          <span className="text-[11px] text-red-400">
+                            {deliveryDays} day{deliveryDays === 1 ? "" : "s"}
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+                    
+                    <td className="px-4 py-3 align-top">
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => setSelectedOrder(order)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteMutation.mutate(order.id)}
+                          disabled={deleteMutation.isPending}
+                          title="Delete order"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-400">
+                  <td colSpan={12} className="px-6 py-12 text-center text-gray-400">
                     <ShoppingCart className="mx-auto mb-2 h-10 w-10 text-gray-200" />
                     No orders found
                   </td>
@@ -508,6 +767,39 @@ export default function AdminOrders() {
           </table>
         </div>
       </div>
+
+      {filtered.length > 0 ? (
+        <div className="flex flex-col gap-3 rounded-2xl border bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-gray-500">
+            Showing <span className="font-medium text-gray-900">{startIndex + 1}</span> to{" "}
+            <span className="font-medium text-gray-900">{Math.min(startIndex + rowsPerPage, filtered.length)}</span> of{" "}
+            <span className="font-medium text-gray-900">{filtered.length}</span> orders
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={safeCurrentPage <= 1}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-gray-500">
+              Page {safeCurrentPage} of {totalPages}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={safeCurrentPage >= totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
         <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto pr-2">
@@ -586,7 +878,7 @@ export default function AdminOrders() {
                   <div key={index} className="mb-3 rounded-2xl border border-slate-200 p-4 last:mb-0">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                       <img
-                        src={item.image_url || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=50&q=80"}
+                        src={getOrderItemImage(item)}
                         alt=""
                         className="h-12 w-12 rounded-lg object-cover"
                       />
@@ -604,6 +896,10 @@ export default function AdminOrders() {
                                   .join(" | ")}
                               </p>
                             ) : null}
+                            <p className="mt-2 text-xs font-medium text-red-600">
+                              Due date: {formatDateOnly(getItemDueDate(item, toValidDate(selectedOrder.created_date)))}
+                              {getItemDeliveryLabel(item) ? ` (${getItemDeliveryLabel(item)})` : ""}
+                            </p>
                           </div>
                           <p className="text-sm font-medium">{formatCurrency((item.quantity || 0) * (item.price || 0))}</p>
                         </div>

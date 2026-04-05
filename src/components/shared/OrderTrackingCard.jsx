@@ -34,6 +34,50 @@ const stepIcons = {
 };
 
 const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const toValidDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+const addDays = (date, days) => new Date(date.getTime() + days * MS_PER_DAY);
+const getItemDeliveryEstimate = (item, orderCreatedDate) => {
+  const explicitDueDate = toValidDate(item?.delivery_due_date);
+  if (explicitDueDate) return explicitDueDate;
+
+  const deliveryDays = Number(item?.delivery_days || 0);
+  if (!orderCreatedDate || deliveryDays <= 0) return null;
+
+  return addDays(orderCreatedDate, deliveryDays);
+};
+const getOrderDeliveryEstimate = (order) => {
+  const explicitDueDate = toValidDate(order?.delivery_due_date);
+  if (explicitDueDate) return explicitDueDate;
+
+  const orderCreatedDate = toValidDate(order?.created_date);
+  if (!orderCreatedDate) return null;
+
+  const itemDueDates = (order?.items || [])
+    .map((item) => getItemDeliveryEstimate(item, orderCreatedDate))
+    .filter(Boolean);
+
+  if (itemDueDates.length === 0) return null;
+
+  return itemDueDates.reduce((latest, date) => (date > latest ? date : latest));
+};
+const formatDeliveryEstimate = (order) => {
+  const dueDate = getOrderDeliveryEstimate(order);
+  if (!dueDate) return null;
+
+  const createdDate = toValidDate(order?.created_date);
+  const deliveryDays =
+    createdDate && dueDate ? Math.max(0, Math.round((dueDate.getTime() - createdDate.getTime()) / MS_PER_DAY)) : null;
+
+  return {
+    dueDate,
+    deliveryDays,
+  };
+};
 
 export default function OrderTrackingCard({ order, statusColors = defaultStatusColors, compactItemLimit = 2 }) {
   const [open, setOpen] = useState(false);
@@ -49,6 +93,7 @@ export default function OrderTrackingCard({ order, statusColors = defaultStatusC
         : 1;
   const itemCount = order.items?.length || 0;
   const previewItems = (order.items || []).slice(0, compactItemLimit);
+  const deliveryEstimate = formatDeliveryEstimate(order);
 
   return (
     <>
@@ -74,6 +119,12 @@ export default function OrderTrackingCard({ order, statusColors = defaultStatusC
             {latestUpdate?.changed_at ? (
               <p className="text-xs text-gray-400">
                 Updated {format(new Date(latestUpdate.changed_at), "MMM d, h:mm a")}
+              </p>
+            ) : null}
+            {deliveryEstimate ? (
+              <p className="text-xs text-emerald-700">
+                Estimated delivery: {format(deliveryEstimate.dueDate, "MMM d, yyyy")}
+                {deliveryEstimate.deliveryDays !== null ? ` (${deliveryEstimate.deliveryDays} day${deliveryEstimate.deliveryDays === 1 ? "" : "s"})` : ""}
               </p>
             ) : null}
           </div>
@@ -127,6 +178,16 @@ export default function OrderTrackingCard({ order, statusColors = defaultStatusC
                 {order.status}
               </Badge>
             </div>
+
+            {deliveryEstimate ? (
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm">
+                <p className="font-medium text-emerald-900">Estimated delivery</p>
+                <p className="mt-1 text-emerald-700">
+                  {format(deliveryEstimate.dueDate, "MMM d, yyyy")}
+                  {deliveryEstimate.deliveryDays !== null ? ` (${deliveryEstimate.deliveryDays} day${deliveryEstimate.deliveryDays === 1 ? "" : "s"})` : ""}
+                </p>
+              </div>
+            ) : null}
 
             <div className="space-y-4">
               {timeline.map((step, stepIndex) => {

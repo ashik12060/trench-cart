@@ -276,6 +276,7 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
         ...syncStockWithVariants(normalizedProduct.variants || [], normalizedProduct),
         images: normalizeImageList(normalizedProduct.images),
         subcategory_id: normalizedProduct.subcategory_id || "",
+        delivery_days: normalizedProduct.delivery_days ?? 0,
       });
     } else {
       setForm(ensureClientBarcodes({
@@ -291,6 +292,7 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
         subcategory_id: "",
         stock_quantity: 0,
         low_stock_threshold: 5,
+        delivery_days: 0,
         is_active: true,
         is_featured: false,
         brand: "",
@@ -315,6 +317,7 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
         : null;
       cleanData.cost_price = cleanData.cost_price ? parseFloat(cleanData.cost_price) : null;
       cleanData.low_stock_threshold = parseInt(cleanData.low_stock_threshold, 10) || 5;
+      cleanData.delivery_days = Math.max(0, parseInt(cleanData.delivery_days, 10) || 0);
       cleanData.weight = cleanData.weight ? parseFloat(cleanData.weight) : null;
       cleanData.stock_quantity = computeVariantStock(cleanData.variants);
       cleanData.images = normalizeImageList(cleanData.images);
@@ -844,6 +847,19 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
               <Label>Weight (kg)</Label>
               <Input type="number" step="0.01" value={form.weight || ""} onChange={(e) => update("weight", e.target.value)} className="mt-1.5" />
             </div>
+            <div>
+              <Label>Delivery in Days</Label>
+              <Input
+                type="number"
+                min="0"
+                value={form.delivery_days ?? 0}
+                onChange={(e) => update("delivery_days", e.target.value)}
+                className="mt-1.5"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                The admin order due date will be calculated from the order date using this number of days.
+              </p>
+            </div>
           </div>
 
           <div className="flex gap-6">
@@ -1064,6 +1080,7 @@ const CSV_TEMPLATE_COLUMNS = [
   "cost_price",
   "stock_quantity",
   "low_stock_threshold",
+  "delivery_days",
   "is_active",
   "is_featured",
   "brand",
@@ -1091,6 +1108,7 @@ const createCsvTemplate = () =>
       cost_price: 12,
       stock_quantity: 0,
       low_stock_threshold: 5,
+      delivery_days: 4,
       is_active: true,
       is_featured: false,
       brand: "TrenchCart",
@@ -1168,6 +1186,7 @@ const normalizeImportedRow = (row) => ({
     : parseNumberCell(row?.cost_price, null),
   stock_quantity: parseNumberCell(row?.stock_quantity, 0),
   low_stock_threshold: parseNumberCell(row?.low_stock_threshold, 5),
+  delivery_days: parseNumberCell(row?.delivery_days, 0),
   is_active: parseBooleanCell(row?.is_active, true),
   is_featured: parseBooleanCell(row?.is_featured, false),
   brand: String(row?.brand || "").trim(),

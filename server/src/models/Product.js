@@ -30,6 +30,7 @@ const ProductSchema = new mongoose.Schema(
     subcategory_id: { type: String, default: "" },
     stock_quantity: { type: Number, default: 0 },
     low_stock_threshold: { type: Number, default: 5 },
+    delivery_days: { type: Number, default: 0 },
     is_active: { type: Boolean, default: true },
     is_featured: { type: Boolean, default: false },
     brand: { type: String, default: "" },

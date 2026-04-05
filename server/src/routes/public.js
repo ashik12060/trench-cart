@@ -5,6 +5,7 @@ import { Order } from "../models/Order.js";
 import { CarouselSlide } from "../models/CarouselSlide.js";
 import { parseFields, parseFilters, parseSort } from "../utils/query.js";
 import { findVariantByAttributes, recalcStockFromVariants } from "../utils/inventory.js";
+import { enrichOrdersWithItemImages, getProductPrimaryImage } from "../utils/orderImages.js";
 import { optionalCustomer } from "../middleware/auth.js";
 
 const normalizeString = (value) => (typeof value === "string" ? value.trim() : "");
@@ -110,16 +111,9 @@ publicRouter.post("/orders/checkout", optionalCustomer, async (req, res, next) =
     const normalizedName = normalizeString(rawName) || "Guest Shopper";
     const normalizedPhone = normalizeString(payload.customer_phone || payload.phone || customer?.phone || "");
     const normalizedShippingAddress = normalizeShippingAddress(payload.shipping_address || {}, normalizedPhone);
-    const orderPayload = {
-      ...payload,
-      customer_id: customer?.id,
-      customer_email: normalizedEmail,
-      customer_name: normalizedName,
-      customer_phone: normalizedPhone,
-      shipping_address: normalizedShippingAddress,
-    };
-
-    const order = await Order.create(orderPayload);
+    const createdAt = new Date();
+    const normalizedItems = [];
+    let orderDeliveryDueDate = null;
 
     for (const item of items) {
       if (!item.product_id || !item.quantity) {
@@ -129,6 +123,49 @@ publicRouter.post("/orders/checkout", optionalCustomer, async (req, res, next) =
       if (qty <= 0) {
         continue;
       }
+
+      const product = await Product.findById(item.product_id);
+      if (!product) {
+        continue;
+      }
+
+      const deliveryDays = Math.max(0, Number(product.delivery_days || 0));
+      const deliveryDueDate = deliveryDays > 0
+        ? new Date(createdAt.getTime() + deliveryDays * 24 * 60 * 60 * 1000)
+        : null;
+
+      if (deliveryDueDate && (!orderDeliveryDueDate || deliveryDueDate > orderDeliveryDueDate)) {
+        orderDeliveryDueDate = deliveryDueDate;
+      }
+
+      normalizedItems.push({
+        ...item,
+        image_url: normalizeString(item.image_url) || getProductPrimaryImage(product),
+        delivery_days: deliveryDays,
+        delivery_due_date: deliveryDueDate,
+      });
+    }
+
+    if (normalizedItems.length === 0) {
+      return res.status(400).json({ error: "Invalid checkout payload" });
+    }
+
+    const orderPayload = {
+      ...payload,
+      customer_id: customer?.id,
+      customer_email: normalizedEmail,
+      customer_name: normalizedName,
+      customer_phone: normalizedPhone,
+      shipping_address: normalizedShippingAddress,
+      items: normalizedItems,
+      delivery_due_date: orderDeliveryDueDate,
+      created_date: createdAt,
+    };
+
+    const order = await Order.create(orderPayload);
+
+    for (const item of normalizedItems) {
+      const qty = Number(item.quantity || 0);
       const product = await Product.findById(item.product_id);
       if (!product) {
         continue;
@@ -170,7 +207,7 @@ publicRouter.get("/orders/my", async (req, res, next) => {
     }
 
     const orders = await Order.find(query).sort({ created_date: -1 }).exec();
-    res.json(orders);
+    res.json(await enrichOrdersWithItemImages(orders));
   } catch (error) {
     next(error);
   }

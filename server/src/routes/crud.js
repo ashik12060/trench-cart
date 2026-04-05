@@ -11,7 +11,7 @@ const normalizeLeanDoc = (doc) => {
 };
 
 export const createCrudRouter = (Model, options = {}) => {
-  const { afterUpdate } = options;
+  const { afterUpdate, afterFindMany } = options;
   const router = Router();
 
   router.get("/", async (req, res, next) => {
@@ -27,7 +27,8 @@ export const createCrudRouter = (Model, options = {}) => {
       query = query.lean();
 
       const data = await query.exec();
-      res.json(data.map(normalizeLeanDoc));
+      const normalizedData = data.map(normalizeLeanDoc);
+      res.json(afterFindMany ? await afterFindMany(normalizedData, req) : normalizedData);
     } catch (error) {
       next(error);
     }

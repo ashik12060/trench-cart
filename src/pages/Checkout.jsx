@@ -84,7 +84,7 @@ export default function Checkout() {
         product_name: item.name,
         quantity: item.quantity,
         price: item.sale_price || item.price,
-        image_url: item.images?.[0] || "",
+        image_url: item.image_url || item.images?.[0] || "",
         variant_color: item.variant?.color || null,
         variant_size: item.variant?.size || null,
         variant_sku: item.variant?.sku || null,
