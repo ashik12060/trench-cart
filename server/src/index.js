@@ -18,7 +18,7 @@ import { ensureAdminUser } from "./utils/seedAdmin.js";
 import { usersRouter } from "./routes/users.js";
 
 const app = express();
-const port = Number(process.env.PORT || 4000);
+const port = Number(process.env.PORT || 4001);
 const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:5173,https://trenchcart-site.netlify.app")
   .split(",")
   .map((item) => item.trim())
