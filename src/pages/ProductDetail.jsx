@@ -1,11 +1,12 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { storeApi } from '@/api/storeClient';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, Heart, ShoppingCart, Truck, RotateCcw, ShieldCheck, Minus, Plus, ChevronRight } from "lucide-react";
+import { Star, Heart, ShoppingCart, Truck, RotateCcw, ShieldCheck, Minus, Plus, ChevronRight, Loader2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import ProductCard from '@/components/shared/ProductCard';
 import { createPageUrl } from '@/utils';
 import { useCart } from "@/lib/CartContext";
@@ -13,6 +14,8 @@ import { useParams, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import { getProductPrimaryImage } from "@/utils/productImages";
 import { getRootCategories } from "@/utils/categoryTree";
+import { useCustomerAuth } from "@/lib/CustomerAuthContext";
+import { toast } from "sonner";
 
 export default function ProductDetail() {
   const [searchParams] = useSearchParams();
@@ -21,7 +24,11 @@ export default function ProductDetail() {
   const [qty, setQty] = useState(1);
   const [activeImage, setActiveImage] = useState("");
   const [zoom, setZoom] = useState({ x: 50, y: 50, active: false });
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
   const { addToCart } = useCart();
+  const { customer } = useCustomerAuth();
+  const queryClient = useQueryClient();
 
 
   const { data: product, isLoading } = useQuery({
@@ -40,6 +47,22 @@ export default function ProductDetail() {
   const { data: categories = [] } = useQuery({
     queryKey: ['product-categories'],
     queryFn: () => storeApi.entities.Category.filter({ is_active: true }),
+  });
+  const { data: approvedReviews = [] } = useQuery({
+    queryKey: ["product-reviews", productId],
+    queryFn: () => storeApi.reviews.list({ product_id: productId }, "-created_date"),
+    enabled: !!productId,
+  });
+  const { data: customerOrders = [] } = useQuery({
+    queryKey: ["customer-review-eligibility", customer?.id],
+    queryFn: async () => {
+      try {
+        return await storeApi.customers.orders();
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!customer?.id,
   });
   const rootCategories = getRootCategories(categories);
   const categoryMap = useMemo(() => {
@@ -225,6 +248,38 @@ export default function ProductDetail() {
   const handleImageLeave = () => {
     setZoom((prev) => ({ ...prev, active: false }));
   };
+
+  const reviewSummary = useMemo(() => {
+    if (approvedReviews.length === 0) {
+      return { average: 0, count: 0 };
+    }
+
+    const count = approvedReviews.length;
+    const average = approvedReviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / count;
+    return { average, count };
+  }, [approvedReviews]);
+  const hasPurchasedProduct = customerOrders.some((order) =>
+    Array.isArray(order?.items) && order.items.some((item) => String(item.product_id) === String(product?.id)),
+  );
+  const purchasedReviewOrder = useMemo(() => {
+    return customerOrders.find((order) =>
+      Array.isArray(order?.items) &&
+      order.items.some((item) => String(item.product_id) === String(product?.id || product?._id || productId)),
+    ) || null;
+  }, [customerOrders, product?.id, product?._id, productId]);
+
+  const submitReviewMutation = useMutation({
+    mutationFn: (payload) => storeApi.reviews.create(payload),
+    onSuccess: async () => {
+      toast.success("Review submitted for approval");
+      setReviewRating(5);
+      setReviewComment("");
+      await queryClient.invalidateQueries({ queryKey: ["product-reviews", productId] });
+    },
+    onError: (error) => {
+      toast.error(error?.message || "Unable to submit review");
+    },
+  });
 
   if (isLoading) {
     return (
@@ -551,6 +606,138 @@ export default function ProductDetail() {
             )}
           </TabsContent>
         </Tabs>
+      </div>
+
+      {/* Reviews */}
+      <div className="mt-12">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Customer Reviews</h2>
+            {reviewSummary.count > 0 ? (
+              <p className="mt-1 text-sm text-gray-500">
+                {reviewSummary.count} approved review{reviewSummary.count === 1 ? "" : "s"}
+              </p>
+            ) : null}
+          </div>
+          {reviewSummary.count > 0 ? (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center">
+                {Array(5).fill(0).map((_, index) => (
+                  <Star
+                    key={index}
+                    className={`h-4 w-4 ${index < Math.round(reviewSummary.average) ? "fill-amber-400 text-amber-400" : "text-gray-200"}`}
+                  />
+                ))}
+              </div>
+              <span className="text-sm font-medium text-gray-700">{reviewSummary.average.toFixed(1)} / 5</span>
+            </div>
+          ) : null}
+        </div>
+
+        <div className={`mt-4 grid gap-6 ${approvedReviews.length > 0 ? "lg:grid-cols-[1.1fr_0.9fr]" : ""}`}>
+          {approvedReviews.length > 0 ? (
+            <div className="rounded-xl border border-gray-100 bg-white p-6">
+              <div className="space-y-4">
+                {approvedReviews.map((review) => (
+                  <div key={review.id} className="rounded-xl border border-gray-100 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-gray-900">{review.customer_name || "Verified Buyer"}</p>
+                        <p className="text-xs text-gray-400">
+                          {review.created_date ? new Date(review.created_date).toLocaleDateString() : ""}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        {Array(5).fill(0).map((_, index) => (
+                          <Star
+                            key={index}
+                            className={`h-4 w-4 ${index < Number(review.rating || 0) ? "fill-amber-400 text-amber-400" : "text-gray-200"}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="mt-3 text-sm leading-relaxed text-gray-600">{review.comment}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="rounded-xl border border-gray-100 bg-white p-6">
+            <p className="text-sm font-semibold text-gray-900">Write a review</p>
+            {!customer ? (
+              <div className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
+                Please log in to write a review.
+              </div>
+            ) : !hasPurchasedProduct ? (
+              <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
+                Only customers who purchased this product can submit a review.
+              </div>
+            ) : (
+              <form
+                className="mt-4 space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitReviewMutation.mutate({
+                    product_id: product.id || product._id || productId,
+                    order_id: purchasedReviewOrder?.id || "",
+                    order_number: purchasedReviewOrder?.order_number || "",
+                    rating: reviewRating,
+                    comment: reviewComment.trim(),
+                  });
+                }}
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Your rating</p>
+                  <div className="mt-2 flex items-center gap-1">
+                    {Array(5).fill(0).map((_, index) => {
+                      const value = index + 1;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setReviewRating(value)}
+                          className="rounded-full p-1"
+                          aria-label={`${value} star review`}
+                        >
+                          <Star
+                            className={`h-6 w-6 ${value <= reviewRating ? "fill-amber-400 text-amber-400" : "text-gray-200"}`}
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Comment</p>
+                  <Textarea
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    placeholder="Share what you liked about the product..."
+                    className="mt-2 min-h-[120px] rounded-2xl"
+                    required
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="rounded-full bg-blue-800 hover:bg-blue-900"
+                  disabled={submitReviewMutation.isPending || !reviewComment.trim()}
+                >
+                  {submitReviewMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting
+                    </>
+                  ) : (
+                    "Submit for approval"
+                  )}
+                </Button>
+              </form>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Related products */}

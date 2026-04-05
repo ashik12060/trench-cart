@@ -1,7 +1,7 @@
 import React from "react";
 import clsx from "clsx";
 import { Link, NavLink } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Package, List, Box, LogOut, Eye, Truck, ScanLine, ImageUp } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Package, List, Box, LogOut, Eye, Truck, ScanLine, ImageUp, Star } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import logo from "@/assets/logo-removebd.png";
 
@@ -15,6 +15,7 @@ const navItems = [
   { label: "Media", to: "/admin/media", icon: ImageUp },
   { label: "Carousel", to: "/admin/carousel", icon: ImageUp },
   { label: "Orders", to: "/admin/orders", icon: ShoppingBag },
+  { label: "Reviews", to: "/admin/reviews", icon: Star },
 ];
 
 export default function AdminLayout({ children, currentPageName }) {

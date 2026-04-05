@@ -66,6 +66,7 @@ import AdminInventory from './pages/AdminInventory';
 import AdminBarcodes from './pages/AdminBarcodes';
 import AdminMedia from './pages/AdminMedia';
 import AdminCarousel from './pages/AdminCarousel';
+import AdminReviews from './pages/AdminReviews';
 import __Layout from './Layout.jsx';
 
 export const PAGES = {
@@ -88,6 +89,7 @@ export const PAGES = {
     "admin/barcodes": AdminBarcodes,
     "admin/media": AdminMedia,
     "admin/carousel": AdminCarousel,
+    "admin/reviews": AdminReviews,
 }
 
 export const pagesConfig = {

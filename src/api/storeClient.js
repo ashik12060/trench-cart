@@ -132,6 +132,35 @@ const storeApi = {
       return request("/users/me/orders");
     },
   },
+  reviews: {
+    list(filters = {}, order, limit) {
+      const query = buildQuery(filters, order, limit);
+      const suffix = query ? `?${query}` : "";
+      return request(`/reviews${suffix}`);
+    },
+    create(data) {
+      return request("/reviews", {
+        method: "POST",
+        body: data,
+      });
+    },
+    adminList(filters = {}, order, limit) {
+      const query = buildQuery(filters, order, limit);
+      const suffix = query ? `?${query}` : "";
+      return request(`/admin/reviews${suffix}`);
+    },
+    update(id, data) {
+      return request(`/admin/reviews/${id}`, {
+        method: "PUT",
+        body: data,
+      });
+    },
+    delete(id) {
+      return request(`/admin/reviews/${id}`, {
+        method: "DELETE",
+      });
+    },
+  },
   uploads: {
     async image({ file, folder, publicId } = {}) {
       const formData = new FormData();

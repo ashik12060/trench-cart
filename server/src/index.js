@@ -16,9 +16,10 @@ import { requireAdmin } from "./middleware/auth.js";
 import { publicRouter } from "./routes/public.js";
 import { ensureAdminUser } from "./utils/seedAdmin.js";
 import { usersRouter } from "./routes/users.js";
+import { reviewsRouter, adminReviewsRouter } from "./routes/reviews.js";
 
 const app = express();
-const port = Number(process.env.PORT || 4001);
+const port = Number(process.env.PORT || 4000);
 const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:5173,https://trenchcart-site.netlify.app")
   .split(",")
   .map((item) => item.trim())
@@ -39,10 +40,12 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api", publicRouter);
+app.use("/api/reviews", reviewsRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/admin/products", requireAdmin, productsRouter);
 app.use("/api/admin/categories", requireAdmin, categoriesRouter);
 app.use("/api/admin/orders", requireAdmin, ordersRouter);
+app.use("/api/admin/reviews", adminReviewsRouter);
 app.use("/api/admin/suppliers", requireAdmin, suppliersRouter);
 app.use("/api/admin/carousel-slides", requireAdmin, carouselSlidesRouter);
 app.use("/api/admin/media", requireAdmin, mediaRouter);
