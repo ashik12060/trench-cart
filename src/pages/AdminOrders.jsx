@@ -383,7 +383,6 @@ export default function AdminOrders() {
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 14;
     const contentWidth = pageWidth - margin * 2;
-    const phone = getOrderPhone(order);
     let y = 16;
 
     const ensureSpace = (height = 10) => {
@@ -831,6 +830,19 @@ export default function AdminOrders() {
                 <div>
                   <p className="text-gray-400">Payment</p>
                   <p className="font-medium capitalize">{selectedOrder.payment_method?.replaceAll("_", " ")}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400">Visitor Country</p>
+                  <p className="font-medium">
+                    {selectedOrder.visitor_country_code === "BD"
+                      ? "Bangladesh (BD)"
+                      : selectedOrder.visitor_country_code === "US"
+                      ? "United States (USA)"
+                      : selectedOrder.visitor_country_code || "Unknown"}
+                  </p>
+                  {selectedOrder.visitor_country_source ? (
+                    <p className="text-xs text-gray-400">Detected via {selectedOrder.visitor_country_source}</p>
+                  ) : null}
                 </div>
                 <div>
                   <p className="text-gray-400 mb-1">Order Status</p>

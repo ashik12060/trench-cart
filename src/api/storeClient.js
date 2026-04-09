@@ -174,6 +174,11 @@ const storeApi = {
       });
     },
   },
+  location: {
+    current() {
+      return request("/visitor-context");
+    },
+  },
   media: {
     list(order, limit) {
       const query = buildQuery({}, order, limit);

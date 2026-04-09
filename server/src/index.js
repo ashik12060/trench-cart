@@ -25,6 +25,8 @@ const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:5173,http
   .map((item) => item.trim())
   .filter(Boolean);
 
+app.set("trust proxy", process.env.TRUST_PROXY === "true" ? 1 : false);
+
 app.use(
   cors({
     origin: allowedOrigins,

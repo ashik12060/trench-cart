@@ -7,6 +7,7 @@ import { parseFields, parseFilters, parseSort } from "../utils/query.js";
 import { findVariantByAttributes, recalcStockFromVariants } from "../utils/inventory.js";
 import { enrichOrdersWithItemImages, getProductPrimaryImage } from "../utils/orderImages.js";
 import { optionalCustomer } from "../middleware/auth.js";
+import { buildPublicAvailabilityFilter, getCountryName, isProductAvailableInCountry, resolveVisitorCountry } from "../utils/countries.js";
 
 const normalizeString = (value) => (typeof value === "string" ? value.trim() : "");
 const normalizeEmail = (value) => normalizeString(value).toLowerCase();
@@ -23,6 +24,7 @@ const sanitizePublicProduct = (product) => {
   delete data.supplier_code;
   delete data.supplier_purchase_quantity;
   delete data.barcode_image_url;
+  delete data.available_countries;
   if (Array.isArray(data.variants)) {
     data.variants = data.variants.map((variant) => {
       const nextVariant = { ...variant };
@@ -35,6 +37,12 @@ const sanitizePublicProduct = (product) => {
 };
 
 export const publicRouter = Router();
+
+publicRouter.use((req, res, next) => {
+  req.visitorCountry = resolveVisitorCountry(req);
+  res.locals.visitorCountry = req.visitorCountry;
+  next();
+});
 
 const sanitizeCarouselSlide = (slide) => {
   const data = typeof slide?.toJSON === "function" ? slide.toJSON() : { ...(slide || {}) };
@@ -53,13 +61,23 @@ const normalizeShippingAddress = (shippingAddress = {}, fallbackPhone = "") => (
   country: normalizeString(shippingAddress.country),
 });
 
+publicRouter.get("/visitor-context", (req, res) => {
+  res.json({
+    country_code: req.visitorCountry?.code || "",
+    country_name: getCountryName(req.visitorCountry?.code || ""),
+    source: req.visitorCountry?.source || "unknown",
+  });
+});
+
 publicRouter.get("/products", async (req, res, next) => {
   try {
     const filters = parseFilters(req.query);
     const sort = parseSort(req.query.sort);
     const limit = req.query.limit ? Number(req.query.limit) : 0;
     const fields = parseFields(req.query.fields);
-    let query = Product.find(filters).sort(sort).lean();
+    const availabilityFilter = buildPublicAvailabilityFilter(req.visitorCountry?.code || "");
+    const queryFilters = Object.keys(filters).length > 0 ? { $and: [filters, availabilityFilter] } : availabilityFilter;
+    let query = Product.find(queryFilters).sort(sort).lean();
     if (limit > 0) query = query.limit(limit);
     if (fields) query = query.select(fields);
     const products = await query.exec();
@@ -112,20 +130,46 @@ publicRouter.post("/orders/checkout", optionalCustomer, async (req, res, next) =
     const normalizedPhone = normalizeString(payload.customer_phone || payload.phone || customer?.phone || "");
     const normalizedShippingAddress = normalizeShippingAddress(payload.shipping_address || {}, normalizedPhone);
     const createdAt = new Date();
+    const visitorCountryCode = req.visitorCountry?.code || "";
+    const visitorCountrySource = req.visitorCountry?.source || "unknown";
     const normalizedItems = [];
+    const blockedItems = [];
+    const missingItems = [];
+    const invalidItems = [];
     let orderDeliveryDueDate = null;
 
     for (const item of items) {
       if (!item.product_id || !item.quantity) {
+        invalidItems.push({
+          product_id: String(item.product_id || "").trim(),
+          reason: "missing_product_id_or_quantity",
+        });
         continue;
       }
       const qty = Number(item.quantity || 0);
       if (qty <= 0) {
+        invalidItems.push({
+          product_id: String(item.product_id || "").trim(),
+          reason: "invalid_quantity",
+        });
         continue;
       }
 
       const product = await Product.findById(item.product_id);
       if (!product) {
+        missingItems.push({
+          product_id: String(item.product_id || "").trim(),
+          reason: "product_not_found",
+        });
+        continue;
+      }
+
+      if (!isProductAvailableInCountry(product.available_countries, visitorCountryCode)) {
+        blockedItems.push({
+          product_id: String(product.id || product._id || item.product_id || "").trim(),
+          product_name: String(product.name || "").trim(),
+          reason: visitorCountryCode ? `not_available_in_${visitorCountryCode.toLowerCase()}` : "not_available_for_detected_country",
+        });
         continue;
       }
 
@@ -146,6 +190,21 @@ publicRouter.post("/orders/checkout", optionalCustomer, async (req, res, next) =
       });
     }
 
+    if (blockedItems.length > 0) {
+      return res.status(403).json({
+        error: "Some items are not available for your country",
+        blocked_items: blockedItems,
+      });
+    }
+
+    if (missingItems.length > 0 || invalidItems.length > 0) {
+      return res.status(400).json({
+        error: "Invalid checkout payload",
+        missing_items: missingItems,
+        invalid_items: invalidItems,
+      });
+    }
+
     if (normalizedItems.length === 0) {
       return res.status(400).json({ error: "Invalid checkout payload" });
     }
@@ -159,6 +218,8 @@ publicRouter.post("/orders/checkout", optionalCustomer, async (req, res, next) =
       shipping_address: normalizedShippingAddress,
       items: normalizedItems,
       delivery_due_date: orderDeliveryDueDate,
+      visitor_country_code: visitorCountryCode,
+      visitor_country_source: visitorCountrySource,
       created_date: createdAt,
     };
 

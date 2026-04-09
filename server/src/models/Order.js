@@ -57,6 +57,8 @@ const OrderSchema = new mongoose.Schema(
     customer_name: { type: String, default: "" },
     customer_email: { type: String, default: "" },
     customer_phone: { type: String, default: "" },
+    visitor_country_code: { type: String, default: "" },
+    visitor_country_source: { type: String, default: "" },
     status: {
       type: String,
       default: "pending",

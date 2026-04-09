@@ -4,6 +4,7 @@ import { Category } from "../models/Category.js";
 import { Supplier } from "../models/Supplier.js";
 import { parseFields, parseFilters, parseSort } from "../utils/query.js";
 import { buildProductBarcodeBase, buildVariantBarcode, generateProductBarcode, normalizeBarcodeValue } from "../utils/barcodes.js";
+import { normalizeCountrySelection } from "../utils/countries.js";
 
 const router = Router();
 
@@ -118,6 +119,7 @@ const normalizeProductPayload = async (body = {}, existingDoc = null) => {
   payload.category_id = String(payload.category_id || "").trim();
   payload.subcategory_id = String(payload.subcategory_id || "").trim();
   payload.sub_subcategory_id = String(payload.sub_subcategory_id || "").trim();
+  payload.available_countries = normalizeCountrySelection(payload.available_countries);
   const usedBarcodes = await getUsedBarcodes(existingDoc?.id || null);
   payload.variants = normalizeVariants(payload.variants);
   payload.barcode = createUniqueProductBarcode(payload, usedBarcodes, payload.barcode);

@@ -17,6 +17,7 @@ import SearchBar from "@/components/store/SearchBar";
 import { getProductPrimaryImage } from "@/utils/productImages";
 import { getCategoryById, getCategoryLineage, getRootCategories, getSubcategoriesByParent } from "@/utils/categoryTree";
 import { buildVariantBarcode, createBarcodeSvgFile, ensureClientBarcodes, generateProductBarcode, normalizeClientBarcode } from "@/lib/barcodes";
+import { COUNTRY_OPTIONS, formatCountrySelection, normalizeCountrySelection } from "@/utils/countries";
 
 export default function AdminProducts() {
   const [showForm, setShowForm] = useState(false);
@@ -113,6 +114,7 @@ export default function AdminProducts() {
               <tr className="bg-gray-50 text-left">
                 <th className="px-6 py-3 font-medium text-gray-500">Product</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Category</th>
+                <th className="px-6 py-3 font-medium text-gray-500">Countries</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Supplier</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Price</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Stock</th>
@@ -148,6 +150,11 @@ export default function AdminProducts() {
                           </p>
                         ) : null}
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Badge className="border-0 bg-slate-100 text-slate-700">
+                        {formatCountrySelection(product.available_countries)}
+                      </Badge>
                     </td>
                     <td className="px-6 py-4">
                       {product.supplier_available && product.supplier_name ? (
@@ -212,7 +219,7 @@ export default function AdminProducts() {
               })}
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-400">
                     <Package className="mx-auto mb-2 h-10 w-10 text-gray-200" />
                     No products found
                   </td>
@@ -266,6 +273,26 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
     return Math.max(parsedPrice - parsedDiscount, 0).toFixed(2);
   };
 
+  const selectedCountries = normalizeCountrySelection(form.available_countries);
+  const setAvailableCountries = (nextCountries) =>
+    setForm((prev) => ({
+      ...prev,
+      available_countries: normalizeCountrySelection(nextCountries),
+    }));
+
+  const toggleAvailableCountry = (countryCode) => {
+    setForm((prev) => {
+      const currentCountries = normalizeCountrySelection(prev.available_countries);
+      const nextCountries = currentCountries.includes(countryCode)
+        ? currentCountries.filter((code) => code !== countryCode)
+        : [...currentCountries, countryCode];
+      return {
+        ...prev,
+        available_countries: normalizeCountrySelection(nextCountries),
+      };
+    });
+  };
+
   React.useEffect(() => {
     if (product) {
       const normalizedProduct = ensureClientBarcodes({
@@ -276,6 +303,7 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
         ...syncStockWithVariants(normalizedProduct.variants || [], normalizedProduct),
         images: normalizeImageList(normalizedProduct.images),
         subcategory_id: normalizedProduct.subcategory_id || "",
+        available_countries: normalizeCountrySelection(normalizedProduct.available_countries),
       });
     } else {
       setForm(ensureClientBarcodes({
@@ -297,6 +325,7 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
         is_featured: false,
         brand: "",
         weight: "",
+        available_countries: normalizeCountrySelection([]),
         tags: [],
         images: [],
         variants: [],
@@ -323,6 +352,7 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
       cleanData.images = normalizeImageList(cleanData.images);
       cleanData.subcategory_id = String(cleanData.subcategory_id || "").trim();
       cleanData.sub_subcategory_id = String(cleanData.sub_subcategory_id || "").trim();
+      cleanData.available_countries = normalizeCountrySelection(cleanData.available_countries);
       if (!cleanData.subcategory_id) {
         throw new Error("Please select a subcategory for this product.");
       }
@@ -883,6 +913,57 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
             </div>
           </div>
 
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Country Availability</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  The server filters this product by the visitor's detected country. Choose one or both markets.
+                </p>
+              </div>
+              <Badge className="border-0 bg-white text-slate-700 shadow-sm">
+                {formatCountrySelection(selectedCountries)}
+              </Badge>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {COUNTRY_OPTIONS.map((country) => (
+                <label
+                  key={country.code}
+                  className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300"
+                >
+                  <Checkbox
+                    checked={selectedCountries.includes(country.code)}
+                    onCheckedChange={() => toggleAvailableCountry(country.code)}
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-1">
+                    <p className="font-medium text-slate-900">
+                      {country.name} ({country.shortLabel})
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {country.code === "BD"
+                        ? "Show this product only to visitors resolved as Bangladesh."
+                        : "Show this product only to visitors resolved as the United States."}
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button type="button" variant="outline" className="rounded-full" onClick={() => setAvailableCountries(["BD"])}>
+                Bangladesh only
+              </Button>
+              <Button type="button" variant="outline" className="rounded-full" onClick={() => setAvailableCountries(["US"])}>
+                USA only
+              </Button>
+              <Button type="button" variant="outline" className="rounded-full" onClick={() => setAvailableCountries(["BD", "US"])}>
+                Both countries
+              </Button>
+            </div>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <Label>Brand</Label>
@@ -1119,6 +1200,7 @@ const CSV_TEMPLATE_COLUMNS = [
   "sku",
   "category_id",
   "subcategory_id",
+  "available_countries",
   "price",
   "sale_price",
   "discount_amount",
@@ -1147,6 +1229,7 @@ const createCsvTemplate = () =>
       sku: "TSH-001",
       category_id: "category-id-here",
       subcategory_id: "",
+      available_countries: "BD|US",
       price: 25,
       sale_price: "",
       discount_amount: "",
@@ -1221,6 +1304,7 @@ const normalizeImportedRow = (row) => ({
   sku: String(row?.sku || "").trim(),
   category_id: String(row?.category_id || "").trim(),
   subcategory_id: String(row?.subcategory_id || "").trim(),
+  available_countries: normalizeCountrySelection(row?.available_countries),
   price: parseNumberCell(row?.price, 0),
   sale_price: row?.sale_price === "" || row?.sale_price === null || row?.sale_price === undefined
     ? null
@@ -1354,10 +1438,10 @@ function ProductCsvImportDialog({ open, onClose, categories }) {
         </DialogHeader>
 
         <div className="space-y-5">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
             Use this when you already have product data in Excel. Keep one product per row, save the sheet as CSV, and upload it here.
             <div className="mt-2 text-xs text-slate-500">
-              Categories must use the category ID from your Categories page and subcategories should use the subcategory ID. Images are separated with `|`. Variants should be JSON in one cell.
+              Categories must use the category ID from your Categories page and subcategories should use the subcategory ID. Use `BD`, `US`, or `BD|US` for availability. Images are separated with `|`. Variants should be JSON in one cell.
             </div>
           </div>
 
@@ -1396,6 +1480,7 @@ function ProductCsvImportDialog({ open, onClose, categories }) {
                     <th className="px-4 py-3 font-medium">SKU</th>
                     <th className="px-4 py-3 font-medium">Category</th>
                     <th className="px-4 py-3 font-medium">Subcategory</th>
+                    <th className="px-4 py-3 font-medium">Countries</th>
                     <th className="px-4 py-3 font-medium">Price</th>
                     <th className="px-4 py-3 font-medium">Images</th>
                     <th className="px-4 py-3 font-medium">Variants</th>
@@ -1404,7 +1489,7 @@ function ProductCsvImportDialog({ open, onClose, categories }) {
                 <tbody>
                   {previewRows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                      <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
                         Upload a CSV file to preview your rows here.
                       </td>
                     </tr>
@@ -1415,6 +1500,7 @@ function ProductCsvImportDialog({ open, onClose, categories }) {
                         <td className="px-4 py-3">{row.sku || "-"}</td>
                         <td className="px-4 py-3">{categories.find((cat) => cat.id === row.category_id)?.name || row.category_id || "-"}</td>
                         <td className="px-4 py-3">{categories.find((cat) => cat.id === row.subcategory_id)?.name || row.subcategory_id || "-"}</td>
+                        <td className="px-4 py-3">{formatCountrySelection(row.available_countries)}</td>
                         <td className="px-4 py-3">${Number(row.price || 0).toFixed(2)}</td>
                         <td className="px-4 py-3">{Array.isArray(row.images) ? row.images.length : 0}</td>
                         <td className="px-4 py-3">{Array.isArray(row.variants) ? row.variants.length : 0}</td>

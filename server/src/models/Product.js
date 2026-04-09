@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { baseSchemaOptions } from "./schemaOptions.js";
+import { DEFAULT_COUNTRY_CODES, normalizeCountryList } from "../utils/countries.js";
 
 const VariantSchema = new mongoose.Schema(
   {
@@ -29,6 +30,18 @@ const ProductSchema = new mongoose.Schema(
     category_id: { type: String, default: "" },
     subcategory_id: { type: String, default: "" },
     sub_subcategory_id: { type: String, default: "" },
+    available_countries: {
+      type: [String],
+      default: () => [...DEFAULT_COUNTRY_CODES],
+      validate: {
+        validator: (value) => {
+          const rawValue = Array.isArray(value) ? value : [];
+          const normalized = normalizeCountryList(rawValue);
+          return normalized.length > 0 && normalized.length === rawValue.length;
+        },
+        message: "Product availability must use valid country codes.",
+      },
+    },
     stock_quantity: { type: Number, default: 0 },
     low_stock_threshold: { type: Number, default: 5 },
     delivery_days: { type: Number, default: 0 },
@@ -56,6 +69,7 @@ ProductSchema.index({ created_date: -1 });
 ProductSchema.index({ category_id: 1, created_date: -1 });
 ProductSchema.index({ subcategory_id: 1, created_date: -1 });
 ProductSchema.index({ sub_subcategory_id: 1, created_date: -1 });
+ProductSchema.index({ available_countries: 1, is_active: 1, created_date: -1 });
 ProductSchema.index({ is_active: 1, created_date: -1 });
 ProductSchema.index({ sku: 1 });
 ProductSchema.index({ barcode: 1 });

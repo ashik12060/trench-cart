@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Search,  ShoppingCart, Heart, User, Menu, Truck, RotateCcw, ShieldCheck, Headphones, ShoppingBag } from "lucide-react";
+import { Search, ShoppingCart, User, Menu, Truck, RotateCcw, ShieldCheck, Headphones, ShoppingBag } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -19,11 +19,16 @@ const selectNavCategories = (categories = []) =>
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
     .slice(0, 8);
 
-export default function Layout({ children, currentPageName }) {
+export default function Layout({ children, currentPageName: _currentPageName }) {
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const { cartCount, openCart } = useCart();
   const { customer } = useCustomerAuth();
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    void storeApi.location.current().catch(() => {});
+  }, []);
+
   const { data: categories = [], isFetching: isLoadingCategories } = useQuery({
     queryKey: ["layout-categories"],
     queryFn: () => storeApi.entities.Category.filter({ is_active: true }, "sort_order"),
