@@ -303,6 +303,7 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
         ...syncStockWithVariants(normalizedProduct.variants || [], normalizedProduct),
         images: normalizeImageList(normalizedProduct.images),
         subcategory_id: normalizedProduct.subcategory_id || "",
+        sub_subcategory_id: normalizedProduct.sub_subcategory_id || "",
         available_countries: normalizeCountrySelection(normalizedProduct.available_countries),
       });
     } else {
@@ -352,7 +353,29 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
       cleanData.images = normalizeImageList(cleanData.images);
       cleanData.subcategory_id = String(cleanData.subcategory_id || "").trim();
       cleanData.sub_subcategory_id = String(cleanData.sub_subcategory_id || "").trim();
+      if (cleanData.sub_subcategory_id) {
+        const subSubcategoryLineage = getCategoryLineage(categories, cleanData.sub_subcategory_id);
+        if (subSubcategoryLineage.length < 3) {
+          cleanData.sub_subcategory_id = "";
+        }
+      }
       cleanData.available_countries = normalizeCountrySelection(cleanData.available_countries);
+      const selectedLeafId = cleanData.sub_subcategory_id || cleanData.subcategory_id;
+      const selectedCategoryLineage = selectedLeafId ? getCategoryLineage(categories, selectedLeafId) : [];
+      const normalizedRootCategory = selectedCategoryLineage[0] || null;
+      const normalizedSubcategory = selectedCategoryLineage[1] || null;
+      const normalizedSubSubcategory = selectedCategoryLineage[2] || null;
+
+      if (normalizedRootCategory) {
+        cleanData.category_id = String(normalizedRootCategory.id || "").trim();
+      }
+      if (normalizedSubcategory) {
+        cleanData.subcategory_id = String(normalizedSubcategory.id || "").trim();
+      }
+      cleanData.sub_subcategory_id = normalizedSubSubcategory
+        ? String(normalizedSubSubcategory.id || "").trim()
+        : "";
+
       if (!cleanData.subcategory_id) {
         throw new Error("Please select a subcategory for this product.");
       }
@@ -873,13 +896,15 @@ function ProductFormDialog({ open, onClose, product, categories, rootCategories,
               <Label>Sub-subcategory</Label>
               <Select
                 value={form.sub_subcategory_id || selectedSubsubcategory?.id || ""}
-                onValueChange={(value) =>
+                onValueChange={(value) => {
+                  const nextSubsubcategory = categories.find((category) => String(category.id) === String(value));
                   setForm((prev) => ({
                     ...prev,
                     sub_subcategory_id: value,
+                    subcategory_id: nextSubsubcategory?.parent_category_id || prev.subcategory_id || "",
                     category_id: selectedCategoryId || prev.category_id || "",
-                  }))
-                }
+                  }));
+                }}
                 disabled={!selectedSubcategory?.id || availableSubsubcategories.length === 0}
               >
                 <SelectTrigger className="mt-1.5">

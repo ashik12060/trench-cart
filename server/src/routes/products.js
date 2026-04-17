@@ -102,8 +102,9 @@ const getCategoryLineage = async (categoryId = "") => {
 
   while (currentId && !seen.has(currentId)) {
     seen.add(currentId);
-    const category = await Category.findById(currentId).lean().exec();
-    if (!category) break;
+    const categoryDoc = await Category.findById(currentId).lean().exec();
+    if (!categoryDoc) break;
+    const category = normalizeLeanDoc(categoryDoc);
     lineage.unshift(category);
     currentId = String(category.parent_category_id || "").trim();
   }
@@ -119,6 +120,12 @@ const normalizeProductPayload = async (body = {}, existingDoc = null) => {
   payload.category_id = String(payload.category_id || "").trim();
   payload.subcategory_id = String(payload.subcategory_id || "").trim();
   payload.sub_subcategory_id = String(payload.sub_subcategory_id || "").trim();
+  if (payload.sub_subcategory_id) {
+    const subSubcategoryLineage = await getCategoryLineage(payload.sub_subcategory_id);
+    if (subSubcategoryLineage.length < 3) {
+      payload.sub_subcategory_id = "";
+    }
+  }
   payload.available_countries = normalizeCountrySelection(payload.available_countries);
   const usedBarcodes = await getUsedBarcodes(existingDoc?.id || null);
   payload.variants = normalizeVariants(payload.variants);
